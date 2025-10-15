@@ -43,7 +43,7 @@ export const MainScreen = ({ response, setResponse, setActiveTab, setSharedData 
     console.log("Form data:", formData);
     const job_id = generateJobId();
     // const callback_url = `${window.location.protocol}//${window.location.hostname}:5174/callback`;
-    const callback_url = `${window.location.protocol}//${window.location.hostname}:5174/callback`;
+    const callback_url = `${window.location.origin}/callback`;
     const dataToSend = { ...formData, job_id, callback_url };
 
     console.log("Data sent to backend:", dataToSend);
@@ -63,7 +63,7 @@ export const MainScreen = ({ response, setResponse, setActiveTab, setSharedData 
       let resultData = null;
       while (Date.now() - pollStart < pollTimeoutMs) {
         try {
-          const r = await fetch(`http://${window.location.hostname}:5174/result/${job_id}`);
+          const r = await fetch(`${window.location.origin}/result/${job_id}`);
           if (r.status === 200) {
             const json = await r.json();
             resultData = json?.result ?? null;
