@@ -1,0 +1,184 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* --background: 240 10% 98%; */
+  --foreground: 240 10% 10%;
+  --card: 0 0% 100%;
+  --card-foreground: 240 10% 10%;
+  --primary: 262 83% 58%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 220 14% 96%;
+  --secondary-foreground: 240 10% 10%;
+  --muted: 220 14% 96%;
+  --muted-foreground: 220 9% 46%;
+  --accent: 210 100% 92%;
+  --accent-foreground: 240 10% 10%;
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 0 0% 100%;
+  --shadow-soft: 0 4px 16px -4px hsl(262 83% 58% / 0.15);
+  --shadow-medium: 0 8px 24px -6px hsl(262 83% 58% / 0.2);
+  --radius: 0.75rem;
+  --gradient-primary: linear-gradient(135deg, hsl(262, 83%, 58%), hsl(220, 90%, 56%));
+  --gradient-subtle: linear-gradient(180deg, hsl(240, 10%, 99%), hsl(240, 10%, 97%));
+}
+
+/* Backgrounds */
+.bg-background { background-color: hsl(var(--background)); }
+.bg-card { background-color: hsl(var(--card)); }
+.bg-gradient-primary { background: var(--gradient-primary); }
+.bg-gradient-subtle { background: var(--gradient-subtle); }
+
+/* Text colors */
+.text-foreground { color: hsl(var(--foreground)); }
+.text-muted-foreground { color: hsl(var(--muted-foreground)); }
+.text-primary-foreground { color: hsl(var(--primary-foreground)); }
+.text-accent-foreground { color: hsl(var(--accent-foreground)); }
+.text-destructive { color: hsl(var(--destructive)); }
+.text-destructive-foreground { color: hsl(var(--destructive-foreground)); }
+
+/* Borders */
+/* .border-border { border-color: hsl(var(--border)); } */
+
+/* Shadows */
+.shadow-soft { box-shadow: var(--shadow-soft); }
+.shadow-medium { box-shadow: var(--shadow-medium); }
+
+/* Radius */
+.rounded-lg { border-radius: var(--radius); }
+.rounded { border-radius: var(--radius); }
+
+/* Padding */
+.p-1 { padding: 0.25rem; }
+.p-2 { padding: 0.5rem; }
+.p-3 { padding: 0.75rem; }
+.p-4 { padding: 1rem; }
+.px-2 { padding-left: 0.5rem; padding-right: 0.5rem; }
+.py-2 { padding-top: 0.5rem; padding-bottom: 0.5rem; }
+
+/* Margin */
+.m-1 { margin: 0.25rem; }
+.m-2 { margin: 0.5rem; }
+.m-3 { margin: 0.75rem; }
+.m-4 { margin: 1rem; }
+
+/* Flex & grid */
+.flex { display: flex; }
+.items-center { align-items: center; }
+.justify-center { justify-content: center; }
+.gap-2 { gap: 0.5rem; }
+.gap-3 { gap: 0.75rem; }
+
+/* Width & height */
+.w-6 { width: 1.5rem; }
+.h-6 { height: 1.5rem; }
+.w-10 { width: 2.5rem; }
+.h-10 { height: 2.5rem; }
+
+/* Typography */
+.text-sm { font-size: 0.875rem; }
+.text-base { font-size: 1rem; }
+.text-lg { font-size: 1.125rem; }
+.font-bold { font-weight: 700; }
+.font-medium { font-weight: 500; }
+
+/* Utility */
+.backdrop-blur-sm { backdrop-filter: blur(4px); }
+.sticky { position: sticky; }
+.top-0 { top: 0; }
+.z-50 { z-index: 50; }
+.overflow-hidden { overflow: hidden; }
+.rounded-sm { border-radius: 0.375rem; }
+.whitespace-nowrap { white-space: nowrap; }
+.transition-all { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+.text-transparent { color: transparent; }
+.bg-clip-text { -webkit-background-clip: text; background-clip: text; }
+
+/* ---------- Layout / Responsive utilities (minimal set) ---------- */
+
+/* container */
+.container {
+  width: 100%;
+  max-width: 1280px;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: 1.5rem; /* px-6 */
+  padding-right: 1.5rem;
+}
+
+/* grid basics */
+.grid { display: grid; }
+.grid-cols-1 { grid-template-columns: repeat(1, minmax(0, 1fr)); }
+.grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+
+/* gap helpers */
+.gap-1 { gap: 0.25rem; }
+.gap-2 { gap: 0.5rem; }
+.gap-3 { gap: 0.75rem; }
+.gap-4 { gap: 1rem; }
+.gap-6 { gap: 1.5rem; }
+.gap-8 { gap: 2rem; }
+
+/* margin / padding shorthand used */
+.mt-0 { margin-top: 0; }
+.mt-1 { margin-top: 0.25rem; }
+.mt-2 { margin-top: 0.5rem; }
+.mt-4 { margin-top: 1rem; }
+.mb-8 { margin-bottom: 2rem; }
+
+.p-1 { padding: 0.25rem; }
+.p-2 { padding: 0.5rem; }
+.p-3 { padding: 0.75rem; }
+.p-4 { padding: 1rem; }
+.p-6 { padding: 1.5rem; }
+
+/* width helpers */
+.w-full { width: 100%; }
+
+/* flex helpers */
+.flex-col { display:flex; flex-direction:column; }
+.items-start { align-items: flex-start; }
+.items-center { align-items: center; }
+.justify-center { justify-content: center; }
+
+/* text-center helper */
+.text-center { text-align: center; }
+
+/* alignment for grid children */
+.place-items-start { place-items: start; }
+
+/* column-span helpers (small set) */
+.col-span-1 { grid-column: span 1 / span 1; }
+.col-span-2 { grid-column: span 2 / span 2; }
+.col-span-3 { grid-column: span 3 / span 3; }
+
+/* responsive (lg = 1024px) */
+/* escaped names because JSX uses classes like "lg:grid-cols-3" */
+@media (min-width: 1024px) {
+  .lg\:grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .lg\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .lg\:col-span-1 { grid-column: span 1 / span 1; }
+  .lg\:col-span-2 { grid-column: span 2 / span 2; }
+  .lg\:col-span-3 { grid-column: span 3 / span 3; }
+
+  .lg\:flex { display: flex; }
+  .lg\:grid { display: grid; }
+  .lg\:items-start { align-items: start; }
+}
+
+/* minor utilities used in your JSX */
+.rounded-2xl { border-radius: 1rem; }
+.bg-white { background-color: hsl(0 0% 100%); } /* already used */
+/* .border { border-width: 1px; border-style: solid; } */
+.border-gray-100 { border-color: rgba(0,0,0,0.04); } /*subtle border substitute*/
+.text-muted-foreground { color: hsl(var(--muted-foreground)); }
+.px-6 { padding-left: 1.5rem; padding-right: 1.5rem; }
+.py-8 { padding-top: 2rem; padding-bottom: 2rem; }
+
+/* ensure cards align top within the grid columns */
+.cards-align-top > * { align-self: start; }
+
+/* small helper to make sure Inputs stack vertically with spacing */
+.space-y-6 > * + * { margin-top: 1.5rem; }
