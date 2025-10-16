@@ -42,7 +42,9 @@ export const MainScreen = ({ response, setResponse, setActiveTab, setSharedData 
     
     const job_id = generateJobId();
     const callback_url = `${window.location.origin}/callback`;
+    console.log("form data",formData)
     const dataToSend = { ...formData, job_id, callback_url };
+    console.log("data send to backend",dataToSend)
 
     try {
       const res = await fetch(MainScreenURL, {
@@ -63,7 +65,9 @@ export const MainScreen = ({ response, setResponse, setActiveTab, setSharedData 
       while (Date.now() - pollStart < pollTimeoutMs) {
         try {
           const pollUrl = `${window.location.origin}/result/${job_id}`;
+          console.log("poll url",pollUrl)
           const r = await fetch(pollUrl);
+          console.log("result r",r)
           
           if (r.status === 200) {
             const json = await r.json();
