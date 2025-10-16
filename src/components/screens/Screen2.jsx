@@ -6,10 +6,7 @@ import { InsightsSection } from "@/components/InsightsSection";
 import { marked } from "marked";
 import { generateJobId } from "@/lib/utils";
 
-
-// const Screen2URL = "https://wholesomegoods.app.n8n.cloud/webhook/ab94aeee-3fc4-4d47-be04-a20b701fafd8";
-// const Screen2URL = "http://localhost:8000/v1/screen2"
-const Screen2URL = "https://wholesomegoods.app.n8n.cloud/webhook/49b35a96-aad0-4a57-ade2-f170d0d2370c"
+const Screen2URL = "https://wholesomegoods.app.n8n.cloud/webhook/49b35a96-aad0-4a57-ade2-f170d0d2370c";
 
 export const Screen2 = ({ response, setResponse, sharedData, setActiveTab, setSharedDataForScreen3 }) => {
   const [activeTab] = useState("Screen 2");
@@ -36,47 +33,55 @@ export const Screen2 = ({ response, setResponse, sharedData, setActiveTab, setSh
   const handleSubmit = async () => {
     setLoading(true);
     setResponse(null);
+    setDone(false);
 
     const job_id = generateJobId();
-    const callback_url = `${window.location.protocol}//${window.location.hostname}:5174/callback`;
+    const callback_url = `${window.location.origin}/callback`;
     const dataToSend = { ...formData, job_id, callback_url };
 
     console.log("Data sent to backend:", dataToSend);
     try {
-      const res = await fetch(
-        Screen2URL,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(dataToSend),
-        }
-      );
-      // Poll for result from callback server
+      const res = await fetch(Screen2URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(dataToSend),
+      });
+
+      if (!res.ok) {
+        throw new Error(`n8n returned ${res.status}`);
+      }
+
+      // Poll for result from Netlify function
       const pollStart = Date.now();
       const pollTimeoutMs = 20 * 60 * 1000; // 20 minutes
-      const pollIntervalMs = 1500;
+      const pollIntervalMs = 2000;
       let resultData = null;
+
       while (Date.now() - pollStart < pollTimeoutMs) {
         try {
-          const r = await fetch(`http://${window.location.hostname}:5174/result/${job_id}`);
+          const pollUrl = `${window.location.origin}/result/${job_id}`;
+          const r = await fetch(pollUrl);
+          
           if (r.status === 200) {
             const json = await r.json();
             resultData = json?.result ?? null;
             break;
           }
-        } catch (e) {}
+        } catch (pollError) {
+          // Ignore intermittent polling errors
+        }
         await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
       }
 
       if (resultData == null) {
-        setResponse({ error: "Timed out waiting for result" });
+        setResponse({ error: "Timed out waiting for result. Please try again." });
       } else {
         setResponse(typeof resultData === "string" ? resultData : JSON.stringify(resultData));
         setDone(true);
       }
     } catch (err) {
       console.error("Error calling backend:", err);
-      setResponse({ error: "Failed to connect to backend" });
+      setResponse({ error: `Failed: ${err.message}` });
     } finally {
       setLoading(false);
     }
@@ -89,7 +94,7 @@ export const Screen2 = ({ response, setResponse, sharedData, setActiveTab, setSh
 
   const downloadImage = async (url, filename) => {
     try {
-      const res = await fetch(url, { mode: "cors" }); // fetch the image
+      const res = await fetch(url, { mode: "cors" });
       const blob = await res.blob();
       const blobUrl = window.URL.createObjectURL(blob);
 
@@ -100,7 +105,7 @@ export const Screen2 = ({ response, setResponse, sharedData, setActiveTab, setSh
       a.click();
       a.remove();
 
-      window.URL.revokeObjectURL(blobUrl); // cleanup
+      window.URL.revokeObjectURL(blobUrl);
     } catch (err) {
       console.error("Failed to download image:", err);
     }
@@ -108,7 +113,6 @@ export const Screen2 = ({ response, setResponse, sharedData, setActiveTab, setSh
 
   // Parse response into scripts and insights
   useEffect(() => {
-    // When sharedData comes from MainScreen, populate form fields
     if (sharedData && Object.keys(sharedData).length > 0) {
       setFormData((prev) => ({
         ...prev,
@@ -123,12 +127,10 @@ export const Screen2 = ({ response, setResponse, sharedData, setActiveTab, setSh
       return;
     }
 
-    // Extract all <div class="script"> blocks
     const scripts = [...response.matchAll(/<div class="script">(.*?)<\/div>/gs)].map(
       (m) => m[1]
     );
 
-    // Extract "Based on Insights" section
     const insightsMatch = response.match(/<h3>Based on Insights:<\/h3>([\s\S]*)/);
     let insights = null;
     if (insightsMatch) {
@@ -143,17 +145,14 @@ export const Screen2 = ({ response, setResponse, sharedData, setActiveTab, setSh
 
   return (
     <ScreenLayout>
-      {/* Title */}
       <h1 className="text-2xl font-bold text-white mt-8 mb-4 bg-gradient-primary bg-clip-text text-transparent">
         {activeTab}
       </h1>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* LEFT COLUMN — Input + small image preview */}
         <div className="lg:col-span-1 space-y-6">
           <InputSection title="Input Text" fields={inputFields} onChange={handleInputChange} values={formData}/>
 
-          {/* Small image section */}
           {response && !response.error && (() => {
             const imageMatches = response.match(/https?:\/\/[^\s"']+\.(?:png|jpg|jpeg|webp)/gi);
             if (!imageMatches || imageMatches.length === 0) return null;
@@ -164,15 +163,12 @@ export const Screen2 = ({ response, setResponse, sharedData, setActiveTab, setSh
                 <div className="flex flex-wrap justify-center gap-3">
                   {imageMatches.map((imgUrl, index) => (
                     <div key={index} className="flex flex-col items-center gap-2">
-                      {/* Image preview */}
                       <img
                         src={imgUrl}
                         alt={`Generated product ${index + 1}`}
                         style={{ width: "120px", height: "120px", objectFit: "cover" }}
                         className="rounded-lg border border-border/30 shadow-md hover:scale-105 transition-transform duration-300 cursor-pointer"
                       />
-
-                      {/* Download button */}
                       <button
                         onClick={() => downloadImage(imgUrl, `product_image_${index + 1}.png`)}
                         style={{
@@ -195,26 +191,22 @@ export const Screen2 = ({ response, setResponse, sharedData, setActiveTab, setSh
           })()}
         </div>
 
-        {/* RIGHT COLUMN — Script carousel */}
         <div className="lg:col-span-2 space-y-6">
           {scriptList.length > 0 && (
             <div className="mt-6 bg-card rounded-xl shadow-md p-6 text-foreground overflow-auto max-h-[500px]">
               {currentScriptIndex === scriptList.length - 1 ? (
-                // Last page: Based on Insights
                 <div
                   style={{ maxHeight: "400px", overflowY: "auto", paddingRight: "10px" }}
                   dangerouslySetInnerHTML={{ __html: scriptList[currentScriptIndex] }}
                   className="prose prose-sm [&_p]:my-2 [&_h2]:text-xl [&_h3]:text-lg [&_h2]:font-bold [&_h3]:font-semibold"
                 />
               ) : (
-                // Other script pages
                 <div
                   dangerouslySetInnerHTML={{ __html: scriptList[currentScriptIndex] }}
                   className="prose prose-sm [&_p]:my-2 [&_h2]:text-xl [&_h3]:text-lg [&_h2]:font-bold [&_h3]:font-semibold"
                 />
               )}
 
-              {/* Navigation */}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "16px" }}>
                 <button
                   onClick={() => setCurrentScriptIndex((prev) => Math.max(prev - 1, 0))}
@@ -224,10 +216,10 @@ export const Screen2 = ({ response, setResponse, sharedData, setActiveTab, setSh
                     alignItems: "center",
                     gap: "8px",
                     padding: "8px 16px",
-                    background: "linear-gradient(to right, #3b82f6, #6366f1)", // blue → indigo
+                    background: "linear-gradient(to right, #3b82f6, #6366f1)",
                     color: "white",
                     fontWeight: "500",
-                    borderRadius: "9999px", // pill shape
+                    borderRadius: "9999px",
                     border: "none",
                     boxShadow: "0 4px 6px rgba(0,0,0,0.1)",
                     cursor: currentScriptIndex === 0 ? "not-allowed" : "pointer",
@@ -281,7 +273,6 @@ export const Screen2 = ({ response, setResponse, sharedData, setActiveTab, setSh
             </div>
           )}
 
-          {/* Error */}
           {response && response.error && (
             <div className="mt-6 p-6 bg-card rounded-md shadow-soft text-sm text-red-500">
               {response.error}
@@ -290,7 +281,6 @@ export const Screen2 = ({ response, setResponse, sharedData, setActiveTab, setSh
         </div>
       </div><br/>
 
-      {/* Backend Submit Button */}
       <div className="flex justify-center mt-10">
         {!done ? (
           <Button
@@ -315,7 +305,7 @@ export const Screen2 = ({ response, setResponse, sharedData, setActiveTab, setSh
           >
             {loading ? (
               <span className="flex items-center justify-center space-x-2">
-                <span className="h-4 w-4 border-t-transparent rounded-full animate-spin border-white"></span>
+                <span className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
                 <span>Generating...</span>
               </span>
             ) : (
@@ -326,15 +316,15 @@ export const Screen2 = ({ response, setResponse, sharedData, setActiveTab, setSh
           <Button
             onClick={() => {
               const insightsMatch = response.match(/<h3>Based on Insights:<\/h3>([\s\S]*)/);
-                let insights = "";
-                if (insightsMatch) {
-                  const markdownText = insightsMatch[1];
-                  insights = `<h3>Based on Insights:</h3>` + marked(markdownText);
-                }
+              let insights = "";
+              if (insightsMatch) {
+                const markdownText = insightsMatch[1];
+                insights = `<h3>Based on Insights:</h3>` + marked(markdownText);
+              }
               setSharedDataForScreen3({
                 insightsMatch: insights,
                 imgUrl: extractImageURLFromResponse(response),
-                currentScriptIndex:scriptList[currentScriptIndex],
+                currentScriptIndex: scriptList[currentScriptIndex],
               });
               setActiveTab("screen3");
             }}
