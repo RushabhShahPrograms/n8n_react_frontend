@@ -21,12 +21,6 @@ export const MainScreen = ({ response, setResponse, setActiveTab, setSharedData 
   });
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
-  const [debugInfo, setDebugInfo] = useState([]);
-
-  const addDebug = (msg) => {
-    setDebugInfo(prev => [...prev, `[${new Date().toLocaleTimeString()}] ${msg}`]);
-    console.log(msg);
-  };
 
   const inputFields = [
     { label: "Product URL", name: "productUrl", placeholder: "Enter product URL" },
@@ -44,16 +38,11 @@ export const MainScreen = ({ response, setResponse, setActiveTab, setSharedData 
   const handleSubmit = async () => {
     setLoading(true);
     setResponse(null);
-    setDebugInfo([]);
     setDone(false);
     
     const job_id = generateJobId();
     const callback_url = `${window.location.origin}/callback`;
     const dataToSend = { ...formData, job_id, callback_url };
-
-    addDebug(`Generated job_id: ${job_id}`);
-    addDebug(`Callback URL: ${callback_url}`);
-    addDebug(`Sending request to n8n...`);
 
     try {
       const res = await fetch(MainScreenURL, {
@@ -62,62 +51,39 @@ export const MainScreen = ({ response, setResponse, setActiveTab, setSharedData 
         body: JSON.stringify(dataToSend),
       });
 
-      addDebug(`n8n responded with status: ${res.status}`);
-      
       if (!res.ok) {
-        const errorText = await res.text();
-        addDebug(`n8n error response: ${errorText}`);
         throw new Error(`n8n returned ${res.status}`);
       }
-
-      addDebug(`Starting polling for results...`);
       
       const pollStart = Date.now();
       const pollTimeoutMs = 20 * 60 * 1000; // 20 minutes
       const pollIntervalMs = 2000; // Poll every 2 seconds
       let resultData = null;
-      let pollCount = 0;
 
       while (Date.now() - pollStart < pollTimeoutMs) {
-        pollCount++;
-        addDebug(`Poll attempt ${pollCount}...`);
-        
         try {
           const pollUrl = `${window.location.origin}/result/${job_id}`;
-          addDebug(`Polling: ${pollUrl}`);
-          
           const r = await fetch(pollUrl);
-          addDebug(`Poll response status: ${r.status}`);
           
           if (r.status === 200) {
             const json = await r.json();
-            addDebug(`Received data: ${JSON.stringify(json).substring(0, 100)}...`);
             resultData = json?.result ?? null;
-            addDebug(`Result found! Breaking poll loop.`);
             break;
-          } else if (r.status === 204) {
-            addDebug(`Result not ready yet (204)`);
-          } else {
-            const errorText = await r.text();
-            addDebug(`Unexpected status ${r.status}: ${errorText}`);
           }
         } catch (pollError) {
-          addDebug(`Poll error: ${pollError.message}`);
+          // Ignore intermittent polling errors
         }
         
         await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
       }
 
       if (resultData == null) {
-        addDebug(`❌ Timed out after ${pollCount} attempts`);
-        setResponse({ error: "Timed out waiting for result. Check debug info below." });
+        setResponse({ error: "Timed out waiting for result. Please try again." });
       } else {
-        addDebug(`✅ Success! Received result.`);
         setResponse(typeof resultData === "string" ? resultData : JSON.stringify(resultData));
         setDone(true);
       }
     } catch (err) {
-      addDebug(`❌ Error: ${err.message}`);
       console.error("Error calling backend:", err);
       setResponse({ error: `Failed: ${err.message}` });
     } finally {
@@ -142,18 +108,6 @@ export const MainScreen = ({ response, setResponse, setActiveTab, setSharedData 
         </div>
 
         <div className="lg:col-span-2 space-y-6">
-          {/* Debug Info */}
-          {debugInfo.length > 0 && (
-            <div className="p-4 bg-gray-900 rounded-md">
-              <h3 className="text-sm font-semibold text-gray-300 mb-2">Debug Log:</h3>
-              <div className="text-xs text-gray-400 space-y-1 max-h-60 overflow-y-auto">
-                {debugInfo.map((msg, i) => (
-                  <div key={i}>{msg}</div>
-                ))}
-              </div>
-            </div>
-          )}
-
           {/* Response */}
           {response && !response.error && (
             <div
