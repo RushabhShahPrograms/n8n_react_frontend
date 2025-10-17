@@ -11,10 +11,17 @@ const Screen2URL = "https://wholesomegoods.app.n8n.cloud/webhook/49b35a96-aad0-4
 
 export const Screen2 = ({ response, setResponse, sharedData, setActiveTab, setSharedDataForScreen3 }) => {
   const [activeTab] = useState("AIDA Script");
-  const [formData, setFormData] = useState({
-    productUrl: sharedData?.productUrl || "",
-    winningAngle: sharedData?.winningAngle || "",
-    ctaHook: "",
+  const [formData, setFormData] = useState(() => {
+    // Restore from localStorage, fall back to sharedData
+    try {
+      const saved = localStorage.getItem("screen2FormData");
+      if (saved) return JSON.parse(saved);
+    } catch (_) {}
+    return {
+      productUrl: sharedData?.productUrl || "",
+      winningAngle: sharedData?.winningAngle || "",
+      ctaHook: "",
+    };
   });
   const [loading, setLoading] = useState(false);
   const [scriptList, setScriptList] = useState([]);
@@ -30,6 +37,13 @@ export const Screen2 = ({ response, setResponse, sharedData, setActiveTab, setSh
   const handleInputChange = (name, value) => {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
+
+  // Auto-save to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem("screen2FormData", JSON.stringify(formData));
+    } catch (_) {}
+  }, [formData]);
 
 
     // State for validation errors
@@ -169,6 +183,40 @@ export const Screen2 = ({ response, setResponse, sharedData, setActiveTab, setSh
 
   return (
     <ScreenLayout>
+      <Button
+        variant="secondary"
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "8px",
+          padding: "8px 16px",
+          background: "linear-gradient(to right, #3b82f6, #6366f1)",
+          color: "white",
+          fontWeight: "500",
+          borderRadius: "9999px",
+          border: "none",
+          boxShadow: "0 4px 6px rgba(0,0,0,0.1)",
+          transition: "all 0.3s",
+        }}
+        onMouseOver={(e) => {
+          e.currentTarget.style.filter = "brightness(1.1)";
+        }}
+        onMouseOut={(e) => {
+          e.currentTarget.style.filter = "brightness(1)";
+        }}
+        onClick={() => {
+          try { localStorage.removeItem("screen2FormData"); } catch (_) {}
+          setFormData({
+            productUrl: "",
+            winningAngle: "",
+            ctaHook: "",
+          });
+          setResponse(null);
+          setDone(false);
+        }}
+      >
+        Clear Inputs
+      </Button>
       {/* Title */}
       <h1 className="text-2xl font-bold text-white mt-8 mb-4 bg-gradient-primary bg-clip-text text-transparent">
         {activeTab}

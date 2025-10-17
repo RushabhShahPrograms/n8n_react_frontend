@@ -9,10 +9,16 @@ const Screen4URL = "https://wholesomegoods.app.n8n.cloud/webhook/60ce0ddc-7e2e-4
 
 export const Screen4 = ({ response, setResponse, sharedData, setActiveTab, setSharedDataForScreen5 }) => {
   const [activeTab] = useState("Images to videos");
-  const [formData, setFormData] = useState({
-    scripts: sharedData?.currentScript || "",
-    imgUrls:"",
-    model: sharedData?.model || "Veo3.1",
+  const [formData, setFormData] = useState(() => {
+    try {
+      const saved = localStorage.getItem("screen4FormData");
+      if (saved) return JSON.parse(saved);
+    } catch (_) {}
+    return {
+      scripts: sharedData?.currentScript || "",
+      imgUrls:"",
+      model: sharedData?.model || "Veo3.1",
+    };
   });
   console.log("Shared Data:", sharedData);
   const [uploadedImages, setUploadedImages] = useState([]);
@@ -24,6 +30,11 @@ export const Screen4 = ({ response, setResponse, sharedData, setActiveTab, setSh
   const handleInputChange = (name, value) => {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
+
+  // Auto-save to localStorage
+  useEffect(() => {
+    try { localStorage.setItem("screen4FormData", JSON.stringify(formData)); } catch (_) {}
+  }, [formData]);
 
   // Handle local uploads
   const handleFileUpload = (e) => {
@@ -129,6 +140,36 @@ export const Screen4 = ({ response, setResponse, sharedData, setActiveTab, setSh
 
   return (
     <ScreenLayout>
+      <Button
+        variant="secondary"
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "8px",
+          padding: "8px 16px",
+          background: "linear-gradient(to right, #3b82f6, #6366f1)",
+          color: "white",
+          fontWeight: "500",
+          borderRadius: "9999px",
+          border: "none",
+          boxShadow: "0 4px 6px rgba(0,0,0,0.1)",
+          transition: "all 0.3s",
+        }}
+        onMouseOver={(e) => { e.currentTarget.style.filter = "brightness(1.1)"; }}
+        onMouseOut={(e) => { e.currentTarget.style.filter = "brightness(1)"; }}
+        onClick={() => {
+          try { localStorage.removeItem("screen4FormData"); } catch (_) {}
+          setFormData({
+            scripts: "",
+            imgUrls: "",
+            model: "Veo3.1",
+          });
+          setResponse(null);
+          setDone(false);
+        }}
+      >
+        Clear Inputs
+      </Button>
       <h1 className="text-2xl font-bold text-white mt-8 mb-4 bg-gradient-primary bg-clip-text text-transparent">
         {activeTab}
       </h1>

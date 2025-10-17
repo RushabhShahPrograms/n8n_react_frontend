@@ -9,10 +9,16 @@ const Screen5URL = "https://wholesomegoods.app.n8n.cloud/webhook/c929805e-af8c-4
 
 export const Screen5 = ({ response, setResponse, sharedData, setActiveTab, setSharedDataForScreen6 }) => {
   const [activeTab] = useState("Text to video");  
-  const [formData, setFormData] = useState({
-    currentScript: sharedData?.currentScript || "",
-    winningAngle: sharedData?.winningAngle || "",
-    inspiration: sharedData?.inspiration || "",
+  const [formData, setFormData] = useState(() => {
+    try {
+      const saved = localStorage.getItem("screen5FormData");
+      if (saved) return JSON.parse(saved);
+    } catch (_) {}
+    return {
+      currentScript: sharedData?.currentScript || "",
+      winningAngle: sharedData?.winningAngle || "",
+      inspiration: sharedData?.inspiration || "",
+    };
   });
 
   const [usePrevious, setUsePrevious] = useState({
@@ -40,6 +46,11 @@ export const Screen5 = ({ response, setResponse, sharedData, setActiveTab, setSh
   const handleInputChange = (name, value) => {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
+
+  // Auto-save to localStorage
+  useEffect(() => {
+    try { localStorage.setItem("screen5FormData", JSON.stringify(formData)); } catch (_) {}
+  }, [formData]);
 
   const handleToggleUsePrevious = (name) => {
     setUsePrevious((prev) => ({ ...prev, [name]: !prev[name] }));
@@ -141,6 +152,36 @@ export const Screen5 = ({ response, setResponse, sharedData, setActiveTab, setSh
 
   return (
     <ScreenLayout>
+      <Button
+        variant="secondary"
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "8px",
+          padding: "8px 16px",
+          background: "linear-gradient(to right, #3b82f6, #6366f1)",
+          color: "white",
+          fontWeight: "500",
+          borderRadius: "9999px",
+          border: "none",
+          boxShadow: "0 4px 6px rgba(0,0,0,0.1)",
+          transition: "all 0.3s",
+        }}
+        onMouseOver={(e) => { e.currentTarget.style.filter = "brightness(1.1)"; }}
+        onMouseOut={(e) => { e.currentTarget.style.filter = "brightness(1)"; }}
+        onClick={() => {
+          try { localStorage.removeItem("screen5FormData"); } catch (_) {}
+          setFormData({
+            currentScript: "",
+            winningAngle: "",
+            inspiration: "",
+          });
+          setResponse(null);
+          setDone(false);
+        }}
+      >
+        Clear Inputs
+      </Button>
       <h1 className="text-2xl font-bold text-white mt-8 mb-4 bg-gradient-primary bg-clip-text text-transparent">
         {activeTab}
       </h1>

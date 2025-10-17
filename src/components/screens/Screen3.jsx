@@ -11,13 +11,19 @@ const Screen3URL = "https://wholesomegoods.app.n8n.cloud/webhook/b6e95acd-b2c8-4
 
 export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSharedDataForScreen4 }) => {
   const [activeTab] = useState("Images/Voice");
-  const [formData, setFormData] = useState({
-    scripts: sharedData?.currentScriptIndex || "",
-    insightsMatch: sharedData?.insightsMatch || "",
-    imgUrl: sharedData?.imgUrl || "",
-    voiceStyle: "Rachel-American-calm-young-female",
-    voiceSpeed:"1.0",
-    model: sharedData?.model || "Image-Gen",
+  const [formData, setFormData] = useState(() => {
+    try {
+      const saved = localStorage.getItem("screen3FormData");
+      if (saved) return JSON.parse(saved);
+    } catch (_) {}
+    return {
+      scripts: sharedData?.currentScriptIndex || "",
+      insightsMatch: sharedData?.insightsMatch || "",
+      imgUrl: sharedData?.imgUrl || "",
+      voiceStyle: "Rachel-American-calm-young-female",
+      voiceSpeed:"1.0",
+      model: sharedData?.model || "Image-Gen",
+    };
   });
   const [loading, setLoading] = useState(false);
   const [scriptList, setScriptList] = useState([]);
@@ -48,6 +54,11 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
   const handleInputChange = (name, value) => {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
+
+  // Auto-save to localStorage
+  useEffect(() => {
+    try { localStorage.setItem("screen3FormData", JSON.stringify(formData)); } catch (_) {}
+  }, [formData]);
 
   const getHtmlFromResponse = (resp) => {
     if (!resp) return "";
@@ -199,6 +210,39 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
 
   return (
     <ScreenLayout>
+        <Button
+          variant="secondary"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            padding: "8px 16px",
+            background: "linear-gradient(to right, #3b82f6, #6366f1)",
+            color: "white",
+            fontWeight: "500",
+            borderRadius: "9999px",
+            border: "none",
+            boxShadow: "0 4px 6px rgba(0,0,0,0.1)",
+            transition: "all 0.3s",
+          }}
+          onMouseOver={(e) => { e.currentTarget.style.filter = "brightness(1.1)"; }}
+          onMouseOut={(e) => { e.currentTarget.style.filter = "brightness(1)"; }}
+          onClick={() => {
+            try { localStorage.removeItem("screen3FormData"); } catch (_) {}
+            setFormData({
+              scripts: "",
+              insightsMatch: "",
+              imgUrl: "",
+              voiceStyle: "Rachel-American-calm-young-female",
+              voiceSpeed:"1.0",
+              model: "Image-Gen",
+            });
+            setResponse(null);
+            setDone(false);
+          }}
+        >
+          Clear Inputs
+        </Button>
         {/* Title */}
         <h1 className="text-2xl font-bold text-white mt-8 mb-4 bg-gradient-primary bg-clip-text text-transparent">
             {activeTab}

@@ -9,10 +9,16 @@ const Screen6URL = "https://wholesomegoods.app.n8n.cloud/webhook/64c4971c-3471-4
 
 export const Screen6 = ({ setActiveTab, sharedDataForScreen6, setSharedDataForScreen6 }) => {
   const [activeTab] = useState("Image to Multiple videos");
-  const [formData, setFormData] = useState({
-    imageUrl: "",
-    videoCount: "1",
-    animationPrompt: "",
+  const [formData, setFormData] = useState(() => {
+    try {
+      const saved = localStorage.getItem("screen6FormData");
+      if (saved) return JSON.parse(saved);
+    } catch (_) {}
+    return {
+      imageUrl: "",
+      videoCount: "1",
+      animationPrompt: "",
+    };
   });
   const [uploadedImage, setUploadedImage] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -23,6 +29,11 @@ export const Screen6 = ({ setActiveTab, sharedDataForScreen6, setSharedDataForSc
   const handleInputChange = (name, value) => {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
+
+  // Auto-save to localStorage
+  useEffect(() => {
+    try { localStorage.setItem("screen6FormData", JSON.stringify(formData)); } catch (_) {}
+  }, [formData]);
 
   // handle image upload
   const handleFileUpload = (e) => {
@@ -104,6 +115,32 @@ export const Screen6 = ({ setActiveTab, sharedDataForScreen6, setSharedDataForSc
 
   return (
     <ScreenLayout>
+      <Button
+        variant="secondary"
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "8px",
+          padding: "8px 16px",
+          background: "linear-gradient(to right, #3b82f6, #6366f1)",
+          color: "white",
+          fontWeight: "500",
+          borderRadius: "9999px",
+          border: "none",
+          boxShadow: "0 4px 6px rgba(0,0,0,0.1)",
+          transition: "all 0.3s",
+        }}
+        onMouseOver={(e) => { e.currentTarget.style.filter = "brightness(1.1)"; }}
+        onMouseOut={(e) => { e.currentTarget.style.filter = "brightness(1)"; }}
+        onClick={() => {
+          try { localStorage.removeItem("screen6FormData"); } catch (_) {}
+          setFormData({ imageUrl: "", videoCount: "1", animationPrompt: "" });
+          setResponse(null);
+          setDone(false);
+        }}
+      >
+        Clear Inputs
+      </Button>
       <h1 className="text-2xl font-bold text-white mt-8 mb-4 bg-gradient-primary bg-clip-text text-transparent">
         {activeTab}
       </h1>
