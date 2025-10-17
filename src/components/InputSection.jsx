@@ -10,6 +10,7 @@ export const StyledInput = ({ field, value, onChange }) => {
   return (
     <input
       id={field.name}
+      required={field.require ? field.require : false}
       name={field.name}
       placeholder={field.placeholder}
       value={value}
@@ -32,7 +33,7 @@ export const StyledInput = ({ field, value, onChange }) => {
   );
 };
 
-export const InputSection = ({ title, fields, onChange, values = {} }) => {
+export const InputSection = ({ title, fields, onChange, values = {}, errors = {} }) => {
   return (
     <Card className="p-6 bg-gradient-subtle border border-border/50 rounded-2xl shadow-sm">
       <h3 className="text-lg font-semibold mb-5 text-foreground tracking-wide">
@@ -42,6 +43,7 @@ export const InputSection = ({ title, fields, onChange, values = {} }) => {
       <div className="space-y-6">
         {fields.map((field) => {
           const value = values[field.name] || "";
+          const hasError = errors[field.name];
           return (
             <div key={field.name}>
               <Label
@@ -49,13 +51,14 @@ export const InputSection = ({ title, fields, onChange, values = {} }) => {
                 className="block text-sm font-medium text-foreground mb-2"
                 style={{ textAlign: "left" }}
               >
-                {field.label}
+                {field.label} {field.require && <span className="text-red-500">*</span>}
               </Label>
 
               {field.type === "textarea" ? (
                 <Textarea
                   id={field.name}
                   name={field.name}
+                  required={field.require ? field.require : false}
                   placeholder={field.placeholder}
                   value={value}
                   className="w-full min-h-[100px] text-sm bg-card border border-border/70 
@@ -67,6 +70,8 @@ export const InputSection = ({ title, fields, onChange, values = {} }) => {
                 <select
                   id={field.name}
                   name={field.name}
+                  defaultValue={field.defaultValue || ""}
+                  required={field.require ? field.require : false}
                   value={value}
                   onChange={(e) => onChange(field.name, e.target.value)}
                   className="w-full h-10 text-sm bg-card border border-border/70 
@@ -81,6 +86,9 @@ export const InputSection = ({ title, fields, onChange, values = {} }) => {
                 <StyledInput field={field} value={value} onChange={onChange} />
               )}
               
+              {hasError && (
+                <div className="text-red-500 text-xs mt-1">{hasError}</div>
+              )}
             </div>
           );
         })}

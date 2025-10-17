@@ -4,16 +4,21 @@ import { InputSection } from "@/components/InputSection";
 import { Button } from "@/components/ui/button";
 import { generateJobId } from "@/lib/utils";
 
-const Screen4URL = "http://localhost:8000/v1/screen4";
+const Screen4URL = "https://wholesomegoods.app.n8n.cloud/webhook/60ce0ddc-7e2e-42ef-b5f0-ac2511363667";
+// const Screen4URL = "https://19cafb11c1b9.ngrok-free.app/v1/screen4";
 
-export const Screen4 = ({ response, setResponse, sharedData }) => {
-  const [activeTab] = useState("Screen 4");
+export const Screen4 = ({ response, setResponse, sharedData, setActiveTab, setSharedDataForScreen5 }) => {
+  const [activeTab] = useState("Images to videos");
   const [formData, setFormData] = useState({
-    scripts: sharedData?.currentScript || ""
+    scripts: sharedData?.currentScript || "",
+    imgUrls:"",
+    model: sharedData?.model || "Veo3.1",
   });
   console.log("Shared Data:", sharedData);
   const [uploadedImages, setUploadedImages] = useState([]);
-  const [loading, setLoading] = useState(false);  
+  const [loading, setLoading] = useState(false);
+  const [done, setDone] = useState(false);  
+    
 
   // Handle manual text input
   const handleInputChange = (name, value) => {
@@ -32,15 +37,30 @@ export const Screen4 = ({ response, setResponse, sharedData }) => {
     });
   };
 
+      const [validationErrors, setValidationErrors] = useState({});
+
   const handleSubmit = async () => {
+
+    // Validate form fields
+    const errors = {};
+    Object.keys(formData).forEach((key) => {
+      if (formData[key].trim() === "") {
+        errors[key] = `${key.replace(/([A-Z])/g, " $1").trim()} is required`;
+      }
+    });
+    setValidationErrors(errors);
+    if (Object.keys(errors).length > 0) return;
+
+
     setLoading(true);
     setResponse(null);
-
+    setDone(false);
     const job_id = generateJobId();
-    const callback_url = `${window.location.protocol}//${window.location.hostname}:5174/callback`;
+    const callback_url = `${window.location.origin}/callback`;
     const dataToSend = {
       scripts: formData.scripts,
       imgUrls: formData.imgUrls,
+      model: formData?.model || "Veo3.1",
       uploadedImages,
       job_id,
       callback_url,
@@ -49,40 +69,54 @@ export const Screen4 = ({ response, setResponse, sharedData }) => {
     console.log("📤 Data sent to backend:", dataToSend);
 
     try {
-  const res = await fetch(Screen4URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(dataToSend),
-  });
+    const res = await fetch(Screen4URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(dataToSend),
+    });
+    if (!res.ok) {
+        throw new Error(`n8n returned ${res.status}`);
+    }
 
-  // Poll for result from callback server
-  const pollStart = Date.now();
-  const pollTimeoutMs = 20 * 60 * 1000; // 20 minutes
-  const pollIntervalMs = 1500;
-  let resultData = null;
-  while (Date.now() - pollStart < pollTimeoutMs) {
-    try {
-      const r = await fetch(`http://${window.location.hostname}:5174/result/${job_id}`);
-      if (r.status === 200) {
-        const json = await r.json();
-        resultData = json?.result ?? null;
-        break;
+    // Poll for result from Netlify function
+    const pollStart = Date.now();
+    const pollTimeoutMs = 20 * 60 * 1000; // 20 minutes
+    const pollIntervalMs = 2000;
+    let resultData = null;
+
+    while (Date.now() - pollStart < pollTimeoutMs) {
+        try {
+          const pollUrl = `${window.location.origin}/result/${job_id}`;
+          const r = await fetch(pollUrl);
+          
+          if (r.status === 200) {
+            const json = await r.json();
+            resultData = json?.result ?? null;
+            console.log("✅ Data received from backend:", resultData);
+            break;
+          }
+        } catch (pollError) {
+          // Ignore intermittent polling errors
+        }
+        await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
       }
-    } catch (e) {}
-    await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
-  }
 
-  if (resultData == null) {
-    setResponse({ error: "Timed out waiting for result" });
-  } else {
-    setResponse(resultData);
-  }
-} catch (err) {
-  console.error("❌ Error calling backend:", err);
-  setResponse({ error: "Failed to connect to backend" });
-} finally {
-  setLoading(false);
-}
+    if (resultData == null) {
+        setResponse({ error: "Timed out waiting for result. Please try again." });
+      } else {
+        setResponse(
+          typeof resultData === "string"
+            ? JSON.parse(resultData) // if backend sends a JSON string
+            : resultData
+        );
+        setDone(true);
+      }
+    } catch (err) {
+      console.error("Error calling backend:", err);
+      setResponse({ error: `Failed: ${err.message}` });
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -105,11 +139,13 @@ export const Screen4 = ({ response, setResponse, sharedData }) => {
           <InputSection
             title="Input Data"
             fields={[
-              { label: "Script", name: "scripts", placeholder: "Script from previous screen" },
-              { label: "Image URLs", name: "imgUrls", placeholder: "Add one or multiple image URLs" },
+              { label: "Script", name: "scripts", placeholder: "Script from previous screen", type: "textarea", required: true },
+              { label: "Image URLs", name: "imgUrls", placeholder: "Add one or multiple image URLs", type: "textarea" },
+              {label:"Choose Model", name:"model", type:"select", options:["Veo3.1", "Kling-2-1"]},
             ]}
             onChange={handleInputChange}
             values={formData}
+            errors={validationErrors}
           />
 
           {/* Upload section */}
@@ -141,7 +177,40 @@ export const Screen4 = ({ response, setResponse, sharedData }) => {
         </div>
 
         {/* RIGHT COLUMN — Output preview */}
-        <div className="lg:col-span-2 space-y-6">
+        <div className="lg:col-span-2 space-y-6">        
+        {loading && (
+          <div
+            className="mt-6 p-6 bg-card rounded-md shadow-soft text-sm text-muted-foreground"
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "10px",
+              maxHeight: "200px",
+            }}
+          >
+            <div style={{ fontSize: 18, fontWeight: 700 }}>⏳ IN QUEUE</div>
+            <div style={{ fontSize: 13, opacity: 0.9, textAlign: "center" }}>
+              Request received. Processing may take up to <strong>10–20 minutes</strong>.
+              The server is working — you can go to other screens, results will remain here when ready.
+            </div>
+            <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+              <div style={{ width: 8, height: 8, borderRadius: 8, background: "#3b82f6", animation: "bounce 0.6s infinite alternate" }} />
+              <div style={{ width: 8, height: 8, borderRadius: 8, background: "#60a5fa", animation: "bounce 0.6s 0.15s infinite alternate" }} />
+              <div style={{ width: 8, height: 8, borderRadius: 8, background: "#93c5fd", animation: "bounce 0.6s 0.3s infinite alternate" }} />
+            </div>
+
+            {/* Small keyframe injected inline since we used style prop */}
+            <style>{`
+              @keyframes bounce {
+                from { transform: translateY(0); opacity: 1; }
+                to { transform: translateY(-6px); opacity: 0.7; }
+              }
+            `}</style>
+          </div>
+        )}
+
         {/* Video Previews */}
         {response && !response.error && response[0]?.videoUrlsArray?.length > 0 && (
             <div className="mt-4 bg-muted/40 border border-border/30 rounded-xl p-4 text-center shadow-sm">
@@ -152,7 +221,7 @@ export const Screen4 = ({ response, setResponse, sharedData }) => {
                     <video
                         src={videoUrl}
                         controls
-                        style={{ width: "120px", height: "120px", objectFit: "cover" }}
+                        style={{ width: "160px", height: "160px", objectFit: "cover" }}
                         className="rounded-lg border border-border/20"
                     />
                     <button
@@ -181,25 +250,62 @@ export const Screen4 = ({ response, setResponse, sharedData }) => {
                 ))}
                 </div>
             </div>
-            )}
+          )}
         </div>
       </div>
 
       {/* Submit Button */}
       <div className="flex justify-center mt-10">
+        {!done ? (
         <Button
           onClick={handleSubmit}
           disabled={loading}
-          className={`w-full max-w-[320px] text-lg px-10 py-4 rounded-2xl border-t-transparent transition-all duration-300 ease-in-out ${
-            loading ? "opacity-70" : ""
-          }`}
+          variant="default"
           style={{
-            background: "linear-gradient(to right, #3b82f6, #6366f1)",
-            color: "white",
-          }}
+                flex: 1,
+                textAlign: "center",
+                padding: "12px 16px",
+                borderRadius: "9999px",
+                fontWeight: 500,
+                cursor: loading ? "not-allowed" : "pointer",
+                transition: "all 0.3s",
+                background: "linear-gradient(to right, #3b82f6, #6366f1)",
+                color: "white",
+                border: "none",
+                outline: "none",
+            }}
         >
-          {loading ? "Uploading..." : "🚀 Generate with Images"}
+          {loading ? "Uploading..." : "Generate with Images"}
         </Button>
+        ) : (
+        <Button
+          onClick={() => {
+                setSharedDataForScreen5({
+                currentScript: formData.scripts,
+                winningAngle: "",
+                inspiration: "",
+                });
+                setActiveTab("screen5");
+            }}
+          disabled={loading}
+          variant="default"
+          style={{
+            flex: 1,
+            textAlign: "center",
+            padding: "12px 16px",
+            borderRadius: "9999px",
+            fontWeight: 500,
+            cursor: "pointer",
+            transition: "all 0.3s",
+            background: "linear-gradient(to right, #6366f1, #10b981)",
+            color: "white",
+            border: "none",
+            outline: "none",
+            }}
+        >
+          {loading ? "Uploading..." : "Go to Screen 5"}
+        </Button>
+        )}
       </div>
     </ScreenLayout>
   );
