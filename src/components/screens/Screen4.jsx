@@ -141,7 +141,7 @@ export const Screen4 = ({ response, setResponse, sharedData, setActiveTab, setSh
             fields={[
               { label: "Script", name: "scripts", placeholder: "Script from previous screen", type: "textarea", required: true },
               { label: "Image URLs", name: "imgUrls", placeholder: "Add one or multiple image URLs", type: "textarea" },
-              {label:"Choose Model", name:"model", type:"select", options:["Veo3.1", "Kling-2-1"]},
+              {label:"Choose Model", name:"model", type:"select", options:["Veo3.1", "Veo3", "Kling-2-1"]},
             ]}
             onChange={handleInputChange}
             values={formData}
