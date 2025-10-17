@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { generateJobId } from "@/lib/utils";
 
 const MainScreenURL = "https://wholesomegoods.app.n8n.cloud/webhook/05276933-cda1-4390-81d0-f9f23b47ca38";
-// const MainScreenURL = "https://19cafb11c1b9.ngrok-free.app/v1/main_screen"
+// const MainScreenURL = "https://wholesomegoods.app.n8n.cloud/webhook-test/05276933-cda1-4390-81d0-f9f23b47ca38"
 
 export const MainScreen = ({ response, setResponse, loading, setLoading, done, setDone, setActiveTab, setSharedData }) => {
   const [activeTab, setActiveTabLocal] = useState("Hook and CTA");

@@ -1,11 +1,11 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { ScreenLayout } from "@/components/ScreenLayout";
 import { InputSection } from "@/components/InputSection";
 import { Button } from "@/components/ui/button";
 import { generateJobId } from "@/lib/utils";
 
 const Screen6URL = "https://wholesomegoods.app.n8n.cloud/webhook/64c4971c-3471-4759-b2ee-a9f6438f971a";
-// const Screen6URL = "https://19cafb11c1b9.ngrok-free.app/v1/screen6";
+// const Screen6URL = "https://wholesomegoods.app.n8n.cloud/webhook-test/64c4971c-3471-4759-b2ee-a9f6438f971a";
 
 export const Screen6 = ({ setActiveTab, sharedDataForScreen6, setSharedDataForScreen6 }) => {
   const [activeTab] = useState("Image to Multiple videos");
@@ -24,6 +24,8 @@ export const Screen6 = ({ setActiveTab, sharedDataForScreen6, setSharedDataForSc
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
   const [response, setResponse] = useState(null);
+  const JOB_STATE_KEY = "screen6JobState"; // { job_id, pollStartMs, loading, done }
+  const RESPONSE_KEY = "screen6Response"; // stringified JSON or string
 
   // handle input
   const handleInputChange = (name, value) => {
@@ -34,6 +36,18 @@ export const Screen6 = ({ setActiveTab, sharedDataForScreen6, setSharedDataForSc
   useEffect(() => {
     try { localStorage.setItem("screen6FormData", JSON.stringify(formData)); } catch (_) {}
   }, [formData]);
+
+  // Persist response whenever it changes
+  useEffect(() => {
+    try {
+      if (response && !response.error) {
+        localStorage.setItem(
+          RESPONSE_KEY,
+          typeof response === "string" ? response : JSON.stringify(response)
+        );
+      }
+    } catch (_) {}
+  }, [response]);
 
   // handle image upload
   const handleFileUpload = (e) => {
@@ -74,6 +88,7 @@ export const Screen6 = ({ setActiveTab, sharedDataForScreen6, setSharedDataForSc
       }
 
       const pollStart = Date.now();
+      try { localStorage.setItem(JOB_STATE_KEY, JSON.stringify({ job_id, pollStartMs: pollStart, loading: true, done: false })); } catch (_) {}
       const pollTimeoutMs = 20 * 60 * 1000; // 20 minutes
       const pollIntervalMs = 2000;
       let resultData = null;
@@ -104,14 +119,77 @@ export const Screen6 = ({ setActiveTab, sharedDataForScreen6, setSharedDataForSc
             : resultData
         );
         setDone(true);
+        try {
+          localStorage.setItem(
+            RESPONSE_KEY,
+            typeof resultData === "string" ? resultData : JSON.stringify(resultData)
+          );
+        } catch (_) {}
       }
     } catch (err) {
       console.error("Error calling backend:", err);
       setResponse({ error: "Failed to connect to backend" });
     } finally {
       setLoading(false);
+      try { localStorage.removeItem(JOB_STATE_KEY); } catch (_) {}
     }
   };
+
+  // Resume polling/restore state on mount
+  useEffect(() => {
+    try {
+      const savedState = localStorage.getItem(JOB_STATE_KEY);
+      const savedResponse = localStorage.getItem(RESPONSE_KEY);
+      if (savedResponse && !response) {
+        try { setResponse(JSON.parse(savedResponse)); } catch (_) { setResponse(savedResponse); }
+        setDone(true);
+      }
+      if (savedState) {
+        const { job_id, pollStartMs, loading: wasLoading, done: wasDone } = JSON.parse(savedState);
+        if (wasLoading && !wasDone && job_id) {
+          const pollTimeoutMs = 20 * 60 * 1000;
+          const pollIntervalMs = 2000;
+          const pollStart = pollStartMs || Date.now();
+          setLoading(true);
+          setDone(false);
+          (async () => {
+            let resultData = null;
+            while (Date.now() - pollStart < pollTimeoutMs) {
+              try {
+                const pollUrl = `${window.location.origin}/result/${job_id}`;
+                const r = await fetch(pollUrl);
+                if (r.status === 200) {
+                  const json = await r.json();
+                  resultData = json?.result ?? null;
+                  break;
+                }
+              } catch (_) {}
+              await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+            }
+            if (resultData == null) {
+              setResponse({ error: "Timed out waiting for result. Please try again." });
+            } else {
+              setResponse(
+                typeof resultData === "string" ? JSON.parse(resultData) : resultData
+              );
+              setDone(true);
+              try {
+                localStorage.setItem(
+                  RESPONSE_KEY,
+                  typeof resultData === "string" ? resultData : JSON.stringify(resultData)
+                );
+              } catch (_) {}
+            }
+            setLoading(false);
+            try { localStorage.removeItem(JOB_STATE_KEY); } catch (_) {}
+          })();
+        } else if (wasDone && savedResponse) {
+          setDone(true);
+        }
+      }
+    } catch (_) {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <ScreenLayout>
@@ -134,6 +212,8 @@ export const Screen6 = ({ setActiveTab, sharedDataForScreen6, setSharedDataForSc
         onMouseOut={(e) => { e.currentTarget.style.filter = "brightness(1)"; }}
         onClick={() => {
           try { localStorage.removeItem("screen6FormData"); } catch (_) {}
+          try { localStorage.removeItem(JOB_STATE_KEY); } catch (_) {}
+          try { localStorage.removeItem(RESPONSE_KEY); } catch (_) {}
           setFormData({ imageUrl: "", videoCount: "1", animationPrompt: "" });
           setResponse(null);
           setDone(false);

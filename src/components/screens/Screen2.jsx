@@ -7,7 +7,7 @@ import { generateJobId } from "@/lib/utils";
 
 
 const Screen2URL = "https://wholesomegoods.app.n8n.cloud/webhook/49b35a96-aad0-4a57-ade2-f170d0d2370c";
-// const Screen2URL = "https://19cafb11c1b9.ngrok-free.app/v1/screen2"
+// const Screen2URL = "https://wholesomegoods.app.n8n.cloud/webhook-test/49b35a96-aad0-4a57-ade2-f170d0d2370c"
 
 export const Screen2 = ({ response, setResponse, sharedData, setActiveTab, setSharedDataForScreen3 }) => {
   const [activeTab] = useState("AIDA Script");
@@ -27,6 +27,8 @@ export const Screen2 = ({ response, setResponse, sharedData, setActiveTab, setSh
   const [scriptList, setScriptList] = useState([]);
   const [currentScriptIndex, setCurrentScriptIndex] = useState(0);
   const [done, setDone] = useState(false);
+  const JOB_STATE_KEY = "screen2JobState"; // { job_id, pollStartMs, loading, done }
+  const RESPONSE_KEY = "screen2Response"; // stringified html
 
   const inputFields = [
     { label: "Product URL", name: "productUrl", placeholder: "Enter product URL", required: true },
@@ -44,6 +46,72 @@ export const Screen2 = ({ response, setResponse, sharedData, setActiveTab, setSh
       localStorage.setItem("screen2FormData", JSON.stringify(formData));
     } catch (_) {}
   }, [formData]);
+
+  // Persist response whenever it changes
+  useEffect(() => {
+    try {
+      if (response && !response.error) {
+        localStorage.setItem(RESPONSE_KEY, typeof response === "string" ? response : JSON.stringify(response));
+      }
+    } catch (_) {}
+  }, [response]);
+
+  // Helper: polling loop (resumable)
+  const resumePolling = async (job_id, existingPollStartMs) => {
+    const pollTimeoutMs = 20 * 60 * 1000;
+    const pollIntervalMs = 2000;
+    const pollStart = existingPollStartMs || Date.now();
+
+    setLoading(true);
+    setDone(false);
+
+    while (Date.now() - pollStart < pollTimeoutMs) {
+      try {
+        const pollUrl = `${window.location.origin}/result/${job_id}`;
+        const r = await fetch(pollUrl);
+        if (r.status === 200) {
+          const json = await r.json();
+          const resultData = json?.result ?? null;
+          if (resultData == null) {
+            setResponse({ error: "Timed out waiting for result. Please try again." });
+          } else {
+            setResponse(typeof resultData === "string" ? resultData : JSON.stringify(resultData));
+            setDone(true);
+            try {
+              localStorage.setItem(RESPONSE_KEY, typeof resultData === "string" ? resultData : JSON.stringify(resultData));
+            } catch (_) {}
+          }
+          break;
+        }
+      } catch (_) {}
+      await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+    }
+
+    setLoading(false);
+    // Clear job state on finish or timeout
+    try { localStorage.removeItem(JOB_STATE_KEY); } catch (_) {}
+  };
+
+  // On mount: restore job state/response and resume if needed
+  useEffect(() => {
+    try {
+      const savedState = localStorage.getItem(JOB_STATE_KEY);
+      const savedResponse = localStorage.getItem(RESPONSE_KEY);
+      if (savedResponse && !response) {
+        setResponse(savedResponse);
+        setDone(true);
+      }
+      if (savedState) {
+        const { job_id, pollStartMs, loading: wasLoading, done: wasDone } = JSON.parse(savedState);
+        if (wasLoading && !wasDone && job_id) {
+          resumePolling(job_id, pollStartMs);
+        } else if (wasDone && savedResponse) {
+          setDone(true);
+        }
+      }
+    } catch (_) {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
 
     // State for validation errors
@@ -86,8 +154,11 @@ export const Screen2 = ({ response, setResponse, sharedData, setActiveTab, setSh
         throw new Error(`n8n returned ${res.status}`);
       }
 
-      // Poll for result from Netlify function
+      // Persist job state and begin polling
       const pollStart = Date.now();
+      try {
+        localStorage.setItem(JOB_STATE_KEY, JSON.stringify({ job_id, pollStartMs: pollStart, loading: true, done: false }));
+      } catch (_) {}
       const pollTimeoutMs = 20 * 60 * 1000; // 20 minutes
       const pollIntervalMs = 2000;
       let resultData = null;
@@ -113,12 +184,16 @@ export const Screen2 = ({ response, setResponse, sharedData, setActiveTab, setSh
       } else {
         setResponse(typeof resultData === "string" ? resultData : JSON.stringify(resultData));
         setDone(true);
+        try {
+          localStorage.setItem(RESPONSE_KEY, typeof resultData === "string" ? resultData : JSON.stringify(resultData));
+        } catch (_) {}
       }
     } catch (err) {
       console.error("Error calling backend:", err);
       setResponse({ error: `Failed: ${err.message}` });
     } finally {
       setLoading(false);
+      try { localStorage.removeItem(JOB_STATE_KEY); } catch (_) {}
     }
   };
 
@@ -206,6 +281,8 @@ export const Screen2 = ({ response, setResponse, sharedData, setActiveTab, setSh
         }}
         onClick={() => {
           try { localStorage.removeItem("screen2FormData"); } catch (_) {}
+          try { localStorage.removeItem(JOB_STATE_KEY); } catch (_) {}
+          try { localStorage.removeItem(RESPONSE_KEY); } catch (_) {}
           setFormData({
             productUrl: "",
             winningAngle: "",

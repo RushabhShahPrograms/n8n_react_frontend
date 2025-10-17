@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { generateJobId } from "@/lib/utils";
 
 const Screen5URL = "https://wholesomegoods.app.n8n.cloud/webhook/c929805e-af8c-406b-8bd7-52fb517d01bf";
-// const Screen5URL = "https://19cafb11c1b9.ngrok-free.app/v1/screen5";
+// const Screen5URL = "https://wholesomegoods.app.n8n.cloud/webhook-test/c929805e-af8c-406b-8bd7-52fb517d01bf";
 
 export const Screen5 = ({ response, setResponse, sharedData, setActiveTab, setSharedDataForScreen6 }) => {
   const [activeTab] = useState("Text to video");  
@@ -29,6 +29,8 @@ export const Screen5 = ({ response, setResponse, sharedData, setActiveTab, setSh
 
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
+  const JOB_STATE_KEY = "screen5JobState"; // { job_id, pollStartMs, loading, done }
+  const RESPONSE_KEY = "screen5Response"; // stringified JSON or string
 
   // Pull data from Screen 2 if user chooses "Use Previous"
   useEffect(() => {
@@ -51,6 +53,74 @@ export const Screen5 = ({ response, setResponse, sharedData, setActiveTab, setSh
   useEffect(() => {
     try { localStorage.setItem("screen5FormData", JSON.stringify(formData)); } catch (_) {}
   }, [formData]);
+
+  // Persist response whenever it changes
+  useEffect(() => {
+    try {
+      if (response && !response.error) {
+        localStorage.setItem(
+          RESPONSE_KEY,
+          typeof response === "string" ? response : JSON.stringify(response)
+        );
+      }
+    } catch (_) {}
+  }, [response]);
+
+  // Restore response/done and resume polling if a job is pending
+  useEffect(() => {
+    try {
+      const savedState = localStorage.getItem(JOB_STATE_KEY);
+      const savedResponse = localStorage.getItem(RESPONSE_KEY);
+      if (savedResponse && !response) {
+        try { setResponse(JSON.parse(savedResponse)); } catch (_) { setResponse(savedResponse); }
+        setDone(true);
+      }
+      if (savedState) {
+        const { job_id, pollStartMs, loading: wasLoading, done: wasDone } = JSON.parse(savedState);
+        if (wasLoading && !wasDone && job_id) {
+          const pollTimeoutMs = 20 * 60 * 1000; // 20 minutes
+          const pollIntervalMs = 2000;
+          const pollStart = pollStartMs || Date.now();
+          setLoading(true);
+          setDone(false);
+          (async () => {
+            let resultData = null;
+            while (Date.now() - pollStart < pollTimeoutMs) {
+              try {
+                const pollUrl = `${window.location.origin}/result/${job_id}`;
+                const r = await fetch(pollUrl);
+                if (r.status === 200) {
+                  const json = await r.json();
+                  resultData = json?.result ?? null;
+                  break;
+                }
+              } catch (_) {}
+              await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+            }
+            if (resultData == null) {
+              setResponse({ error: "Timed out waiting for result. Please try again." });
+            } else {
+              setResponse(
+                typeof resultData === "string" ? JSON.parse(resultData) : resultData
+              );
+              setDone(true);
+              try {
+                localStorage.setItem(
+                  RESPONSE_KEY,
+                  typeof resultData === "string" ? resultData : JSON.stringify(resultData)
+                );
+              } catch (_) {}
+            }
+            setLoading(false);
+            try { localStorage.removeItem(JOB_STATE_KEY); } catch (_) {}
+          })();
+        } else if (wasDone && savedResponse) {
+          setDone(true);
+        }
+      }
+    } catch (_) {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleToggleUsePrevious = (name) => {
     setUsePrevious((prev) => ({ ...prev, [name]: !prev[name] }));
@@ -102,8 +172,8 @@ export const Screen5 = ({ response, setResponse, sharedData, setActiveTab, setSh
       if (!res.ok) {
         throw new Error(`n8n returned ${res.status}`);
       }
-
       const pollStart = Date.now();
+      try { localStorage.setItem(JOB_STATE_KEY, JSON.stringify({ job_id, pollStartMs: pollStart, loading: true, done: false })); } catch (_) {}
       const pollTimeoutMs = 20 * 60 * 1000; // 20 minutes
       const pollIntervalMs = 2000;
       let resultData = null;
@@ -134,12 +204,19 @@ export const Screen5 = ({ response, setResponse, sharedData, setActiveTab, setSh
             : resultData
         );
         setDone(true);
+        try {
+          localStorage.setItem(
+            RESPONSE_KEY,
+            typeof resultData === "string" ? resultData : JSON.stringify(resultData)
+          );
+        } catch (_) {}
       }
     } catch (err) {
       console.error("Error calling backend:", err);
       setResponse({ error: "Failed to connect to backend" });
     } finally {
       setLoading(false);
+      try { localStorage.removeItem(JOB_STATE_KEY); } catch (_) {}
     }
   };
 
@@ -171,6 +248,8 @@ export const Screen5 = ({ response, setResponse, sharedData, setActiveTab, setSh
         onMouseOut={(e) => { e.currentTarget.style.filter = "brightness(1)"; }}
         onClick={() => {
           try { localStorage.removeItem("screen5FormData"); } catch (_) {}
+          try { localStorage.removeItem(JOB_STATE_KEY); } catch (_) {}
+          try { localStorage.removeItem(RESPONSE_KEY); } catch (_) {}
           setFormData({
             currentScript: "",
             winningAngle: "",
