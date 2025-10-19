@@ -6,8 +6,8 @@ import { marked } from "marked";
 import { generateJobId } from "@/lib/utils";
 
 
-const Screen3URL = "https://wholesomegoods.app.n8n.cloud/webhook/b6e95acd-b2c8-46fa-9a92-90ae55bc8a5f";
-// const Screen3URL = "https://wholesomegoods.app.n8n.cloud/webhook-test/b6e95acd-b2c8-46fa-9a92-90ae55bc8a5f"
+// const Screen3URL = "https://wholesomegoods.app.n8n.cloud/webhook/b6e95acd-b2c8-46fa-9a92-90ae55bc8a5f";
+const Screen3URL = "https://wholesomegoods.app.n8n.cloud/webhook-test/b6e95acd-b2c8-46fa-9a92-90ae55bc8a5f"
 
 export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSharedDataForScreen4 }) => {
   const [activeTab] = useState("Images/Voice");
@@ -104,6 +104,26 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
       setSelectedImages((prev) => [...new Set([...prev, ...urls])]);
     } else {
       setSelectedImages((prev) => prev.filter((url) => !urls.includes(url)));
+    }
+  };
+
+  // Download all selected images
+  const downloadSelectedImages = async () => {
+    if (selectedImages.length === 0) {
+      alert("Please select at least one image to download.");
+      return;
+    }
+
+    for (let i = 0; i < selectedImages.length; i++) {
+      const url = selectedImages[i];
+      const filename = `selected_image_${i + 1}.png`;
+      
+      // Add a small delay between downloads to avoid overwhelming the browser
+      if (i > 0) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+      
+      await downloadImage(url, filename);
     }
   };
 
@@ -322,30 +342,161 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
     }
   };
 
+  // START: IMPROVED DOWNLOAD FUNCTION FROM SCREEN 7
   const downloadImage = async (url, filename) => {
     try {
-        // Fetch the image as blob (use a proxy if CORS blocks)
-        const res = await fetch(url, { mode: "no-cors" });
-        const blob = await res.blob();
-
-        // Create a blob URL and trigger download
+      // Method 1: Try fetch with CORS
+      const response = await fetch(url, { mode: 'cors' });
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const blob = await response.blob();
+      
+      // Create a blob URL and trigger download
+      const blobUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = filename;
+      a.style.display = "none";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+  
+      // Cleanup
+      setTimeout(() => window.URL.revokeObjectURL(blobUrl), 100);
+      
+      // Show success message
+      alert("✅ Image downloaded successfully!");
+    } catch (err) {
+      console.error("CORS fetch failed:", err);
+      
+      // Method 2: Try multiple CORS proxies
+      const proxies = [
+        `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+        `https://corsproxy.io/?${encodeURIComponent(url)}`,
+        `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`
+      ];
+      
+      let blob;
+      for (const proxyUrl of proxies) {
+        try {
+          const response = await fetch(proxyUrl);
+          if (!response.ok) throw new Error(`Proxy error: ${response.status}`);
+          blob = await response.blob();
+          break; // Success, exit loop
+        } catch (proxyErr) {
+          console.error(`Proxy ${proxyUrl} failed:`, proxyErr);
+          if (proxyUrl === proxies[proxies.length - 1]) {
+            // All proxies failed, fallback to direct
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = filename;
+            a.target = "_blank";
+            a.style.display = "none";
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            setTimeout(() => {
+              alert("⚠️ All proxies failed. Image opened in tab—right-click > 'Save as...' to download.");
+            }, 500);
+          }
+        }
+      }
+      
+      if (blob) {
         const blobUrl = window.URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = blobUrl;
         a.download = filename;
+        a.style.display = "none";
         document.body.appendChild(a);
         a.click();
-        a.remove();
-
-        // Cleanup
-        window.URL.revokeObjectURL(blobUrl);
-    } catch (err) {
-        console.error("Failed to download image:", err);
-        alert(
-        "Download failed due to browser CORS restrictions. Right-click the image and select 'Save as...' instead."
-        );
+        document.body.removeChild(a);
+        setTimeout(() => window.URL.revokeObjectURL(blobUrl), 100);
+        alert("✅ Image downloaded successfully!");
+      }
     }
-    };
+  };
+  // END: IMPROVED DOWNLOAD FUNCTION
+
+  // START: AUDIO DOWNLOAD FUNCTION
+  const downloadAudio = async (url, filename) => {
+    try {
+      // Method 1: Try fetch with CORS
+      const response = await fetch(url, { mode: 'cors' });
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const blob = await response.blob();
+      
+      // Create a blob URL and trigger download
+      const blobUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = filename;
+      a.style.display = "none";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+  
+      // Cleanup
+      setTimeout(() => window.URL.revokeObjectURL(blobUrl), 100);
+      
+      // Show success message
+      alert("✅ Audio downloaded successfully!");
+    } catch (err) {
+      console.error("CORS fetch failed:", err);
+      
+      // Method 2: Try multiple CORS proxies
+      const proxies = [
+        `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+        `https://corsproxy.io/?${encodeURIComponent(url)}`,
+        `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`
+      ];
+      
+      let blob;
+      for (const proxyUrl of proxies) {
+        try {
+          const response = await fetch(proxyUrl);
+          if (!response.ok) throw new Error(`Proxy error: ${response.status}`);
+          blob = await response.blob();
+          break; // Success, exit loop
+        } catch (proxyErr) {
+          console.error(`Proxy ${proxyUrl} failed:`, proxyErr);
+          if (proxyUrl === proxies[proxies.length - 1]) {
+            // All proxies failed, fallback to direct
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = filename;
+            a.target = "_blank";
+            a.style.display = "none";
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            setTimeout(() => {
+              alert("⚠️ All proxies failed. Audio opened in tab—right-click > 'Save as...' to download.");
+            }, 500);
+          }
+        }
+      }
+      
+      if (blob) {
+        const blobUrl = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = blobUrl;
+        a.download = filename;
+        a.style.display = "none";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => window.URL.revokeObjectURL(blobUrl), 100);
+        alert("✅ Audio downloaded successfully!");
+      }
+    }
+  };
+  // END: AUDIO DOWNLOAD FUNCTION
 
   useEffect(() => {
     if (response && !response.error) {
@@ -501,6 +652,16 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
                             <div className="flex gap-2">
                                 <Button variant="outline" size="sm" onClick={() => handleSelectAll(productImages, 'select')}>Select All</Button>
                                 <Button variant="outline" size="sm" onClick={() => handleSelectAll(productImages, 'deselect')}>Deselect All</Button>
+                                {selectedImages.length > 0 && (
+                                    <Button 
+                                        variant="default" 
+                                        size="sm" 
+                                        onClick={downloadSelectedImages}
+                                        style={{ background: "#10b981", color: "white" }}
+                                    >
+                                        Download Selected ({selectedImages.length})
+                                    </Button>
+                                )}
                             </div>
                         </div>
                         <div className="flex flex-wrap justify-center gap-3">
@@ -558,6 +719,16 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
                             <div className="flex gap-2">
                                 <Button variant="outline" size="sm" onClick={() => handleSelectAll(lifestyleImages, 'select')}>Select All</Button>
                                 <Button variant="outline" size="sm" onClick={() => handleSelectAll(lifestyleImages, 'deselect')}>Deselect All</Button>
+                                {selectedImages.length > 0 && (
+                                    <Button 
+                                        variant="default" 
+                                        size="sm" 
+                                        onClick={downloadSelectedImages}
+                                        style={{ background: "#10b981", color: "white" }}
+                                    >
+                                        Download Selected ({selectedImages.length})
+                                    </Button>
+                                )}
                             </div>
                         </div>
                         <div className="flex flex-wrap justify-center gap-3">
@@ -617,7 +788,7 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
                         Your browser does not support the audio element.
                         </audio>
                         <button
-                        onClick={() => window.open(voiceUrl, "_blank")}
+                        onClick={() => downloadAudio(voiceUrl, "generated_voice.mp3")}
                         style={{
                               padding: "4px 8px",
                               fontSize: "12px",
