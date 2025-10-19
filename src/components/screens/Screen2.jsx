@@ -232,6 +232,14 @@ export const Screen2 = ({ response, setResponse, sharedData, setActiveTab, setSh
       }));
     }
 
+    // If there's a valid response, the process is "done". This ensures
+    // the "Go to Screen 3" button persists correctly across tab changes.
+    if (response && !response.error) {
+      setDone(true);
+    } else {
+      setDone(false);
+    }
+
     if (!response || response.error) {
       setScriptList([]);
       setCurrentScriptIndex(0);

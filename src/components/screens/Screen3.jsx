@@ -271,8 +271,18 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
     }
     };
 
-  // Parse response into scripts and insights
+  // This hook now correctly syncs the `done` and `showResult` states with the response.
   useEffect(() => {
+    if (response && !response.error) {
+      setDone(true);
+      // This is the key fix: If a valid response exists, always ensure
+      // the results are shown. This handles re-mounting the component.
+      setShowResult(true);
+    } else {
+      setDone(false);
+      setShowResult(false);
+    }
+
     if (!response || response.error) {
       setScriptList([]);
       setCurrentScriptIndex(0);

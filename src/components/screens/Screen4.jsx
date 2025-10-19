@@ -139,15 +139,18 @@ export const Screen4 = ({ response, setResponse, sharedData, setActiveTab, setSh
     }
   };
 
+  // This hook populates the form from sharedData, but is careful not to overwrite
+  // existing data that might have been restored from localStorage.
   useEffect(() => {
-    if (sharedData) {
-        setFormData({
-        scripts: sharedData.currentScript || "",
-        });
+    if (sharedData?.currentScript && !formData.scripts) {
+      setFormData((prev) => ({
+        ...prev,
+        scripts: sharedData.currentScript,
+      }));
     }
-    }, [sharedData]);
+  }, [sharedData, formData.scripts]);
 
-  // Persist response when it changes
+  // Persist response when it changes and sync the 'done' state
   useEffect(() => {
     try {
       if (response && !response.error) {
@@ -155,8 +158,13 @@ export const Screen4 = ({ response, setResponse, sharedData, setActiveTab, setSh
           RESPONSE_KEY,
           typeof response === "string" ? response : JSON.stringify(response)
         );
+        setDone(true);
+      } else {
+        setDone(false);
       }
-    } catch (_) {}
+    } catch (_) {
+      setDone(false);
+    }
   }, [response]);
 
   // Resume polling/restore done+response on mount

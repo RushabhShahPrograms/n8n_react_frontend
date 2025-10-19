@@ -18,13 +18,8 @@ export const Screen5 = ({ response, setResponse, sharedData, setActiveTab, setSh
       currentScript: sharedData?.currentScript || "",
       winningAngle: sharedData?.winningAngle || "",
       inspiration: sharedData?.inspiration || "",
+      model: "Kling", // Default model
     };
-  });
-
-  const [usePrevious, setUsePrevious] = useState({
-    aidaScript: true,
-    winningAngle: true,
-    inspiration: true,
   });
 
   const [loading, setLoading] = useState(false);
@@ -32,18 +27,18 @@ export const Screen5 = ({ response, setResponse, sharedData, setActiveTab, setSh
   const JOB_STATE_KEY = "screen5JobState"; // { job_id, pollStartMs, loading, done }
   const RESPONSE_KEY = "screen5Response"; // stringified JSON or string
 
-  // Pull data from Screen 2 if user chooses "Use Previous"
+  // This hook now safely populates the form from sharedData only if the fields are empty,
+  // preventing it from overwriting data restored from localStorage.
   useEffect(() => {
     if (sharedData) {
       setFormData((prev) => ({
         ...prev,
-        aidaScript: usePrevious.aidaScript ? sharedData?.aidaScript || "" : prev.aidaScript,
-        winningAngle: usePrevious.winningAngle ? sharedData?.winningAngle || "" : prev.winningAngle,
-        inspiration: usePrevious.inspiration ? sharedData?.inspiration || "" : prev.inspiration,
-        model: sharedData?.model || "Kling",
+        currentScript: prev.currentScript || sharedData.currentScript || "",
+        winningAngle: prev.winningAngle || sharedData.winningAngle || "",
+        inspiration: prev.inspiration || sharedData.inspiration || "",
       }));
     }
-  }, [sharedData, usePrevious]);
+  }, [sharedData]);
 
   const handleInputChange = (name, value) => {
     setFormData((prev) => ({ ...prev, [name]: value }));
@@ -54,7 +49,7 @@ export const Screen5 = ({ response, setResponse, sharedData, setActiveTab, setSh
     try { localStorage.setItem("screen5FormData", JSON.stringify(formData)); } catch (_) {}
   }, [formData]);
 
-  // Persist response whenever it changes
+  // Persist response and sync the 'done' state whenever the response changes.
   useEffect(() => {
     try {
       if (response && !response.error) {
@@ -62,11 +57,17 @@ export const Screen5 = ({ response, setResponse, sharedData, setActiveTab, setSh
           RESPONSE_KEY,
           typeof response === "string" ? response : JSON.stringify(response)
         );
+        // This is the key fix: ensures the button and output stay frozen.
+        setDone(true);
+      } else {
+        setDone(false);
       }
-    } catch (_) {}
+    } catch (_) {
+      setDone(false);
+    }
   }, [response]);
 
-  // Restore response/done and resume polling if a job is pending
+  // Restore response/done and resume polling if a job is pending on mount
   useEffect(() => {
     try {
       const savedState = localStorage.getItem(JOB_STATE_KEY);
@@ -121,10 +122,6 @@ export const Screen5 = ({ response, setResponse, sharedData, setActiveTab, setSh
     } catch (_) {}
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  const handleToggleUsePrevious = (name) => {
-    setUsePrevious((prev) => ({ ...prev, [name]: !prev[name] }));
-  };
 
   // State for validation errors
   const [validationErrors, setValidationErrors] = useState({});
@@ -254,6 +251,7 @@ export const Screen5 = ({ response, setResponse, sharedData, setActiveTab, setSh
             currentScript: "",
             winningAngle: "",
             inspiration: "",
+            model: "Kling",
           });
           setResponse(null);
           setDone(false);
@@ -267,22 +265,12 @@ export const Screen5 = ({ response, setResponse, sharedData, setActiveTab, setSh
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-1">
-          {inputFields.map((field) => (
-            <div key={field.name}>
-              <div className="flex items-center justify-between mb-2">
-            </div>
-            <InputSection
-              fields={[
-                {
-                  ...field,
-                },
-              ]}
+          <InputSection
+              fields={inputFields}
               onChange={handleInputChange}
               values={formData}
               errors={validationErrors}
             />
-            </div>
-          ))}
         </div>
 
         <div className="lg:col-span-2 space-y-6">
@@ -384,8 +372,7 @@ export const Screen5 = ({ response, setResponse, sharedData, setActiveTab, setSh
         ) : (
         <Button
           onClick={() => {
-              setSharedDataForScreen6(response);
-              setActiveTab("screen6");
+              // No action needed here, as requested.
             }}
             disabled={loading}
             variant="default"
@@ -403,7 +390,7 @@ export const Screen5 = ({ response, setResponse, sharedData, setActiveTab, setSh
               outline: "none",
             }}
         >
-          {loading ? "Uploading..." : "Go to Screen 6"}
+          {loading ? "Processing..." : "Generation Complete"}
         </Button>
         )}
       </div>
