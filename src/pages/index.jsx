@@ -167,7 +167,7 @@ const Index = () => {
           </TabsContent>
 
           <TabsContent value="screen2" className="mt-0">
-            <Screen2 response={screen2Response} setResponse={setScreen2Response} setActiveTab={setActiveTab} sharedData={sharedData} setSharedDataForScreen3={setSharedDataForScreen3} />
+            <Screen2 response={screen2Response} setResponse={setScreen2Response} setActiveTab={setActiveTab} sharedData={sharedData} setSharedDataForScreen3={setSharedDataForScreen3} setSharedDataForScreen5={setSharedDataForScreen5} />
           </TabsContent>
 
           <TabsContent value="screen3" className="mt-0">

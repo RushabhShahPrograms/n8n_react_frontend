@@ -221,7 +221,7 @@ export const Screen5 = ({ response, setResponse, sharedData, setActiveTab, setSh
     { label: "Current Script", name: "currentScript", placeholder: "Enter Current Script", type: "textarea", require: true },
     { label: "Winning Angle", name: "winningAngle", placeholder: "Enter Winning Angle", type: "text", require: true },
     { label: "Inspiration", name: "inspiration", placeholder: "Enter Inspiration", type: "textarea", require: true },
-    {label:"Choose Model", name:"model", type:"select", options:["Kling", "Sora 2"," Veo 3","Veo 3.1"], defaultValue: "Kling", require: true},
+    {label:"Choose Model", name:"model", type:"select", options:["Kling", "Sora 2","Veo 3","Veo 3.1"], defaultValue: "Kling", require: true},
   ];
 
   return (

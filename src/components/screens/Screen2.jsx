@@ -9,7 +9,7 @@ import { generateJobId } from "@/lib/utils";
 const Screen2URL = "https://wholesomegoods.app.n8n.cloud/webhook/49b35a96-aad0-4a57-ade2-f170d0d2370c";
 // const Screen2URL = "https://wholesomegoods.app.n8n.cloud/webhook-test/49b35a96-aad0-4a57-ade2-f170d0d2370c"
 
-export const Screen2 = ({ response, setResponse, sharedData, setActiveTab, setSharedDataForScreen3 }) => {
+export const Screen2 = ({ response, setResponse, sharedData, setActiveTab, setSharedDataForScreen3, setSharedDataForScreen5 }) => {
   const [activeTab] = useState("AIDA Script");
   const [formData, setFormData] = useState(() => {
     // Restore from localStorage, fall back to sharedData
@@ -511,48 +511,87 @@ export const Screen2 = ({ response, setResponse, sharedData, setActiveTab, setSh
             )}
           </Button>
         ) : (
-          <Button
-            onClick={() => {
-              const insightsMatch = response.match(/<h3>Based on Insights:<\/h3>([\s\S]*)/);
-              let insights = "";
-              if (insightsMatch) {
-                const markdownText = insightsMatch[1];
-                insights = `<h3>Based on Insights:</h3>` + marked(markdownText);
-              }
-              
-              // Prepare a comprehensive data object for other screens
-              const dataToShare = {
-                // For Screen 3
-                insightsMatch: insights,
-                imgUrl: extractImageURLFromResponse(response),
-                currentScriptIndex: scriptList[currentScriptIndex],
+          <div className="flex gap-4 w-full max-w-2xl">
+            <Button
+              onClick={() => {
+                const insightsMatch = response.match(/<h3>Based on Insights:<\/h3>([\s\S]*)/);
+                let insights = "";
+                if (insightsMatch) {
+                  const markdownText = insightsMatch[1];
+                  insights = `<h3>Based on Insights:</h3>` + marked(markdownText);
+                }
+                
+                // Prepare a comprehensive data object for other screens
+                const dataToShare = {
+                  // For Screen 3
+                  insightsMatch: insights,
+                  imgUrl: extractImageURLFromResponse(response),
+                  currentScriptIndex: scriptList[currentScriptIndex],
 
-                // For Screen 5
-                currentScript: scriptList[currentScriptIndex],
-                winningAngle: formData.winningAngle,
-                inspiration: insights,
-              };
+                  // For Screen 5
+                  currentScript: scriptList[currentScriptIndex],
+                  winningAngle: formData.winningAngle,
+                  inspiration: insights,
+                };
 
-              setSharedDataForScreen3(dataToShare);
-              setActiveTab("screen3");
-            }}
-            variant="default"
-            style={{
-              flex: 1,
-              textAlign: "center",
-              padding: "12px 16px",
-              borderRadius: "9999px",
-              fontWeight: 500,
-              cursor: "pointer",
-              transition: "all 0.3s",
-              background: "linear-gradient(to right, #6366f1, #10b981)",
-              color: "white",
-              border: "none",
-              outline: "none",
-            }}
-          >
-             Go to Screen 3
-          </Button>
+                setSharedDataForScreen3(dataToShare);
+                setActiveTab("screen3");
+              }}
+              variant="default"
+              style={{
+                flex: 1,
+                textAlign: "center",
+                padding: "12px 16px",
+                borderRadius: "9999px",
+                fontWeight: 500,
+                cursor: "pointer",
+                transition: "all 0.3s",
+                background: "linear-gradient(to right, #6366f1, #10b981)",
+                color: "white",
+                border: "none",
+                outline: "none",
+              }}
+            >
+               Go to Screen 3
+            </Button>
+            
+            <Button
+              onClick={() => {
+                const insightsMatch = response.match(/<h3>Based on Insights:<\/h3>([\s\S]*)/);
+                let insights = "";
+                if (insightsMatch) {
+                  const markdownText = insightsMatch[1];
+                  insights = `<h3>Based on Insights:</h3>` + marked(markdownText);
+                }
+                
+                // Prepare data for Screen 5
+                const dataToShare = {
+                  currentScript: scriptList[currentScriptIndex],
+                  winningAngle: formData.winningAngle,
+                  inspiration: insights,
+                };
+
+                setSharedDataForScreen5(dataToShare);
+                setActiveTab("screen5");
+              }}
+              variant="default"
+              style={{
+                flex: 1,
+                textAlign: "center",
+                padding: "12px 16px",
+                borderRadius: "9999px",
+                fontWeight: 500,
+                cursor: "pointer",
+                transition: "all 0.3s",
+                background: "linear-gradient(to right, #f59e0b, #ef4444)",
+                color: "white",
+                border: "none",
+                outline: "none",
+              }}
+            >
+               Go to Screen 5
+            </Button>
+          </div>
         )}
       </div>
     </ScreenLayout>
