@@ -23,12 +23,16 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
       voiceStyle: "Rachel-American-calm-young-female",
       voiceSpeed:"1.0",
       model: sharedData?.model || "Image-Gen",
+      lifestyleImagesCount: 1,
+      productImagesCount: 1,
     };
   });
   const [loading, setLoading] = useState(false);
   const [scriptList, setScriptList] = useState([]);
   const [currentScriptIndex, setCurrentScriptIndex] = useState(0);
-  const [done, setDone] = useState(false);  
+  const [done, setDone] = useState(false);
+  const [isWaitingToDisplay, setIsWaitingToDisplay] = useState(false);
+  const [showResult, setShowResult] = useState(false);
   const JOB_STATE_KEY = "screen3JobState"; // { job_id, pollStartMs, loading, done }
   const RESPONSE_KEY = "screen3Response"; // stringified html or object
 
@@ -36,21 +40,25 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
                     "Drew-American-well-rounded-middle_aged-male",
                     "Clyde-American-war_veteran-middle_aged-male",
                     "Paul-American-authoritative-middle_aged-male",
-                    "Aria-American-husky-middle_aged-female", 
+                    "Aria-American-husky-middle_aged-female",
                     "Domi-American-strong-young-female",
                     "Dave-British-conversational-young-male",
                     "Roger-confident-middle_aged-male",
                     "Fin-Irish-sailor-old-male",
                     "Sarah-American-professional-young-female"];
   const voiceSpeed = ["1.0", "1.1", "1.2"];
+  const imageCountOptions = [1, 2, 3, 4, 5, 6, 7];
+
 
   const inputFields = [
     { label: "Image URL", name: "imgUrl", placeholder: "Image URL from previous screen", required: true },
     { label: "Scripts", type: "textarea", name: "scripts", placeholder: "Script from previous screen", required: true },
     { label: "Insights", type: "textarea", name: "insightsMatch", placeholder: "Insights from previous screen", required: true },
-    { label:"Choose Model", name:"model", type:"select", options:["Image-Gen", "Neno-Banana"]},
+    { label:"Choose Model", name:"model", type:"select", options:["Image-Gen", "Nano-Banana"]},
     { label: "VOICE STYLE", name: "voiceStyle", type: "select", options: voiceStyle, required: true },
     { label: "VOICE SPEED", name: "voiceSpeed", type: "select", options: voiceSpeed, required: true },
+    { label: "Number of Lifestyle Images", name: "lifestyleImagesCount", type: "select", options: imageCountOptions, required: true },
+    { label: "Number of Product Images", name: "productImagesCount", type: "select", options: imageCountOptions, required: true },
     ];
 
   const handleInputChange = (name, value) => {
@@ -92,7 +100,12 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
           } else {
             setResponse(resultData);
             setDone(true);
+            setIsWaitingToDisplay(true);
             try { localStorage.setItem(RESPONSE_KEY, typeof resultData === "string" ? resultData : JSON.stringify(resultData)); } catch (_) {}
+            setTimeout(() => {
+                setIsWaitingToDisplay(false);
+                setShowResult(true);
+            }, 60000); // 1 minute delay
           }
           break;
         }
@@ -116,6 +129,7 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
           setResponse(savedResponse);
         }
         setDone(true);
+        setShowResult(true); // Show immediately if already loaded
       }
       if (savedState) {
         const { job_id, pollStartMs, loading: wasLoading, done: wasDone } = JSON.parse(savedState);
@@ -123,6 +137,7 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
           resumePolling(job_id, pollStartMs);
         } else if (wasDone && savedResponse) {
           setDone(true);
+          setShowResult(true);
         }
       }
     } catch (_) {}
@@ -162,10 +177,12 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
     setLoading(true);
     setResponse(null);
     setDone(false);
+    setShowResult(false);
+    setIsWaitingToDisplay(false);
     const job_id = generateJobId();
     const callback_url = `${window.location.origin}/callback`;
     const dataToSend = {
-       ...formData, 
+       ...formData,
        job_id,
        callback_url,
        model: formData?.model || "Image-Gen",
@@ -196,7 +213,7 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
         try {
           const pollUrl = `${window.location.origin}/result/${job_id}`;
           const r = await fetch(pollUrl);
-          
+
           if (r.status === 200) {
             const json = await r.json();
             resultData = json?.result ?? null;
@@ -213,7 +230,12 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
       } else {
         setResponse(resultData);
         setDone(true);
+        setIsWaitingToDisplay(true);
         try { localStorage.setItem(RESPONSE_KEY, typeof resultData === "string" ? resultData : JSON.stringify(resultData)); } catch (_) {}
+        setTimeout(() => {
+            setIsWaitingToDisplay(false);
+            setShowResult(true);
+        }, 60000); // 1 minute delay
       }
     } catch (err) {
       console.error("Error calling backend:", err);
@@ -310,9 +332,13 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
               voiceStyle: "Rachel-American-calm-young-female",
               voiceSpeed:"1.0",
               model: "Image-Gen",
+              lifestyleImagesCount: 1,
+              productImagesCount: 1,
             });
             setResponse(null);
             setDone(false);
+            setShowResult(false);
+            setIsWaitingToDisplay(false);
           }}
         >
           Clear Inputs
@@ -331,7 +357,7 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
                 onChange={handleInputChange}
                 values={formData}
                 errors={validationErrors}
-            />            
+            />
             </div>
 
             {/* RIGHT COLUMN — optional extra content */}
@@ -368,8 +394,16 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
                   `}</style>
                 </div>
               )}
+              {isWaitingToDisplay && (
+                 <div className="mt-6 p-6 bg-card rounded-md shadow-soft text-sm text-muted-foreground text-center">
+                    <div style={{ fontSize: 18, fontWeight: 700 }}>✅ Processing Complete!</div>
+                    <div style={{ fontSize: 13, opacity: 0.9, marginTop: '8px' }}>
+                        Displaying results in 1 minute...
+                    </div>
+                 </div>
+              )}
               {/* Product Images */}
-              {response && !response.error && (() => {
+              {showResult && response && !response.error && (() => {
                 // Product Images
                 const html = getHtmlFromResponse(response);
                 const productImages = (() => {
@@ -415,7 +449,7 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
             })()}
 
             {/* Lifestyle Images */}
-            {response && !response.error && (() => {
+            {showResult && response && !response.error && (() => {
                 const html = getHtmlFromResponse(response);
                 const lifestyleImages = (() => {
                     const sectionMatch = html.match(/<h3>Generated LifeStyle Image URLs:<\/h3>([\s\S]*?)(<h3>|$)/i);
@@ -461,7 +495,7 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
             })()}
 
             {/* VoiceOver */}
-            {response && !response.error && (() => {
+            {showResult && response && !response.error && (() => {
                 const html = getHtmlFromResponse(response);
                 const voiceUrl = (() => {
                     const sectionMatch = html.match(/<h3>Generated Voice URL:<\/h3>([\s\S]*?)(<h3>|$)/i);
