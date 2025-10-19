@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { ScreenLayout } from "@/components/ScreenLayout";
 import { InputSection } from "@/components/InputSection";
 import { Button } from "@/components/ui/button";
@@ -29,6 +29,7 @@ export const Screen4 = ({ response, setResponse, sharedData, setActiveTab, setSh
   const [selectedVideos, setSelectedVideos] = useState([]);
   const JOB_STATE_KEY = "screen4JobState"; // { job_id, pollStartMs, loading, done }
   const RESPONSE_KEY = "screen4Response"; // stringified JSON or string
+  const fileInputRef = useRef(null);
 
   // Handle manual text input
   const handleInputChange = (name, value) => {
@@ -50,6 +51,15 @@ export const Screen4 = ({ response, setResponse, sharedData, setActiveTab, setSh
       };
       reader.readAsDataURL(file);
     });
+  };
+
+  const handleRemoveUploadedImage = (index) => {
+    setUploadedImages((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleClearAllUploaded = () => {
+    setUploadedImages([]);
+    if (fileInputRef.current) fileInputRef.current.value = null;
   };
 
   const [validationErrors, setValidationErrors] = useState({});
@@ -405,22 +415,38 @@ export const Screen4 = ({ response, setResponse, sharedData, setActiveTab, setSh
               type="file"
               accept="image/*"
               multiple
+              ref={fileInputRef}
               onChange={handleFileUpload}
               className="block w-full text-sm text-gray-300 file:mr-4 file:py-2 file:px-4
                          file:rounded-full file:border-0 file:text-sm file:font-semibold
                          file:bg-blue-600 file:text-white hover:file:bg-blue-700"
             />
             {uploadedImages.length > 0 && (
-              <div className="mt-4 flex flex-wrap gap-2">
-                {uploadedImages.map((img, i) => (
-                  <img
-                    key={i}
-                    src={img}
-                    alt={`upload-${i}`}
-                    style={{ width: "120px", height: "120px", objectFit: "cover" }}
-                    className="w-20 h-20 object-cover rounded-lg border border-border/20"
-                  />
-                ))}
+              <div className="mt-4">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-xs text-foreground/70">{uploadedImages.length} selected</span>
+                  <Button variant="outline" size="sm" onClick={handleClearAllUploaded}>Clear all</Button>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {uploadedImages.map((img, i) => (
+                    <div key={i} className="relative">
+                      <img
+                        src={img}
+                        alt={`upload-${i}`}
+                        style={{ width: "120px", height: "120px", objectFit: "cover" }}
+                        className="w-20 h-20 object-cover rounded-lg border border-border/20"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveUploadedImage(i)}
+                        className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center shadow"
+                        aria-label="Remove image"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </div>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { ScreenLayout } from "@/components/ScreenLayout";
 import { InputSection } from "@/components/InputSection";
 import { Button } from "@/components/ui/button";
@@ -29,6 +29,7 @@ export const Screen6 = ({ setActiveTab, sharedDataForScreen6, setSharedDataForSc
   const [selectedVideos, setSelectedVideos] = useState([]);
   const JOB_STATE_KEY = "screen6JobState"; // { job_id, pollStartMs, loading, done }
   const RESPONSE_KEY = "screen6Response"; // stringified JSON or string
+  const fileInputRef = useRef(null);
 
   // handle input
   const handleInputChange = (name, value) => {
@@ -375,18 +376,33 @@ export const Screen6 = ({ setActiveTab, sharedDataForScreen6, setSharedDataForSc
             <input
               type="file"
               accept="image/*"
+              ref={fileInputRef}
               onChange={handleFileUpload}
               className="block w-full text-sm text-gray-300 file:mr-4 file:py-2 file:px-4 
                          file:rounded-full file:border-0 file:text-sm file:font-semibold 
                          file:bg-purple-600 file:text-white hover:file:bg-purple-700"
             />
             {uploadedImage && (
-              <div className="mt-3 border border-border/30 rounded-lg overflow-hidden">
-                <img
-                  src={uploadedImage}
-                  alt="Uploaded"
-                  className="w-full h-auto max-h-40 object-contain"
-                />
+              <div className="mt-3">
+                <div className="border border-border/30 rounded-lg overflow-hidden">
+                  <img
+                    src={uploadedImage}
+                    alt="Uploaded"
+                    className="w-full h-auto max-h-40 object-contain"
+                  />
+                </div>
+                <div className="flex justify-end mt-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setUploadedImage(null);
+                      if (fileInputRef.current) fileInputRef.current.value = null;
+                    }}
+                  >
+                    Remove uploaded image
+                  </Button>
+                </div>
               </div>
             )}
           </div>
