@@ -68,7 +68,9 @@ export const Screen4 = ({ response, setResponse, sharedData, setActiveTab, setSh
 
     // Validate form fields
     const errors = {};
-    Object.keys(formData).forEach((key) => {
+    // Only validate required fields (scripts and model)
+    const requiredFields = ['scripts'];
+    requiredFields.forEach((key) => {
       if (formData[key].trim() === "") {
         errors[key] = `${key.replace(/([A-Z])/g, " $1").trim()} is required`;
       }
