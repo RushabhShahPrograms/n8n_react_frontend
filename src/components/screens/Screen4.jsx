@@ -3,6 +3,8 @@ import { ScreenLayout } from "@/components/ScreenLayout";
 import { InputSection } from "@/components/InputSection";
 import { Button } from "@/components/ui/button";
 import { generateJobId } from "@/lib/utils";
+import JSZip from 'jszip';
+import { saveAs } from 'file-saver';
 
 const Screen4URL = "https://wholesomegoods.app.n8n.cloud/webhook/60ce0ddc-7e2e-42ef-b5f0-ac2511363667";
 // const Screen4URL = "https://wholesomegoods.app.n8n.cloud/webhook-test/60ce0ddc-7e2e-42ef-b5f0-ac2511363667";
@@ -23,10 +25,10 @@ export const Screen4 = ({ response, setResponse, sharedData, setActiveTab, setSh
   console.log("Shared Data:", sharedData);
   const [uploadedImages, setUploadedImages] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [done, setDone] = useState(false);  
+  const [done, setDone] = useState(false);
+  const [selectedVideos, setSelectedVideos] = useState([]);
   const JOB_STATE_KEY = "screen4JobState"; // { job_id, pollStartMs, loading, done }
   const RESPONSE_KEY = "screen4Response"; // stringified JSON or string
-    
 
   // Handle manual text input
   const handleInputChange = (name, value) => {
@@ -50,7 +52,7 @@ export const Screen4 = ({ response, setResponse, sharedData, setActiveTab, setSh
     });
   };
 
-      const [validationErrors, setValidationErrors] = useState({});
+  const [validationErrors, setValidationErrors] = useState({});
 
   const handleSubmit = async () => {
 
@@ -82,26 +84,26 @@ export const Screen4 = ({ response, setResponse, sharedData, setActiveTab, setSh
     console.log("📤 Data sent to backend:", dataToSend);
 
     try {
-    const res = await fetch(Screen4URL, {
+      const res = await fetch(Screen4URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(dataToSend),
-    });
-    if (!res.ok) {
+      });
+      if (!res.ok) {
         throw new Error(`n8n returned ${res.status}`);
-    }
-    // Persist job state and begin polling
-    const pollStart = Date.now();
-    try { localStorage.setItem(JOB_STATE_KEY, JSON.stringify({ job_id, pollStartMs: pollStart, loading: true, done: false })); } catch (_) {}
-    const pollTimeoutMs = 20 * 60 * 1000; // 20 minutes
-    const pollIntervalMs = 2000;
-    let resultData = null;
+      }
+      // Persist job state and begin polling
+      const pollStart = Date.now();
+      try { localStorage.setItem(JOB_STATE_KEY, JSON.stringify({ job_id, pollStartMs: pollStart, loading: true, done: false })); } catch (_) {}
+      const pollTimeoutMs = 20 * 60 * 1000; // 20 minutes
+      const pollIntervalMs = 2000;
+      let resultData = null;
 
-    while (Date.now() - pollStart < pollTimeoutMs) {
+      while (Date.now() - pollStart < pollTimeoutMs) {
         try {
           const pollUrl = `${window.location.origin}/result/${job_id}`;
           const r = await fetch(pollUrl);
-          
+
           if (r.status === 200) {
             const json = await r.json();
             resultData = json?.result ?? null;
@@ -114,7 +116,7 @@ export const Screen4 = ({ response, setResponse, sharedData, setActiveTab, setSh
         await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
       }
 
-    if (resultData == null) {
+      if (resultData == null) {
         setResponse({ error: "Timed out waiting for result. Please try again." });
       } else {
         setResponse(
@@ -140,79 +142,113 @@ export const Screen4 = ({ response, setResponse, sharedData, setActiveTab, setSh
   };
 
   // START: VIDEO DOWNLOAD FUNCTION
+  const getFilenameFromUrl = (url) => {
+    try {
+      const urlObj = new URL(url);
+      const pathname = urlObj.pathname;
+      const filename = pathname.split('/').pop();
+      return filename || 'downloaded_video.mp4';
+    } catch {
+      return 'downloaded_video.mp4';
+    }
+  };
+
+  const getVideoBlob = async (url) => {
+    try {
+      const res = await fetch(url, { mode: 'cors' });
+      if (!res.ok) throw new Error();
+      const contentType = res.headers.get('content-type');
+      if (!contentType?.startsWith('video/')) throw new Error();
+      return await res.blob();
+    } catch {
+      const proxyPromises = [
+        { base: 'https://api.allorigins.win/raw?url=' },
+        { base: 'https://corsproxy.io/?' },
+        { base: 'https://api.codetabs.com/v1/proxy?quest=' }
+      ].map(async ({ base }) => {
+        try {
+          const proxyUrl = base + encodeURIComponent(url);
+          const res = await fetch(proxyUrl);
+          if (!res.ok) throw new Error();
+          const contentType = res.headers.get('content-type');
+          if (!contentType?.startsWith('video/')) throw new Error();
+          return await res.blob();
+        } catch {
+          throw new Error('Proxy failed');
+        }
+      });
+      return await Promise.any(proxyPromises);
+    }
+  };
+
   const downloadVideo = async (url, filename) => {
     try {
-      // Method 1: Try fetch with CORS
-      const response = await fetch(url, { mode: 'cors' });
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      
-      const blob = await response.blob();
-      
-      // Create a blob URL and trigger download
-      const blobUrl = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
+      const blob = await getVideoBlob(url);
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
       a.href = blobUrl;
       a.download = filename;
-      a.style.display = "none";
+      a.style.display = 'none';
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-  
-      // Cleanup
-      setTimeout(() => window.URL.revokeObjectURL(blobUrl), 100);
-      
-      // Show success message
-      alert("✅ Video downloaded successfully!");
+      URL.revokeObjectURL(blobUrl);
     } catch (err) {
-      console.error("CORS fetch failed:", err);
-      
-      // Method 2: Try multiple CORS proxies
-      const proxies = [
-        `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
-        `https://corsproxy.io/?${encodeURIComponent(url)}`,
-        `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`
-      ];
-      
-      let blob;
-      for (const proxyUrl of proxies) {
-        try {
-          const response = await fetch(proxyUrl);
-          if (!response.ok) throw new Error(`Proxy error: ${response.status}`);
-          blob = await response.blob();
-          break; // Success, exit loop
-        } catch (proxyErr) {
-          console.error(`Proxy ${proxyUrl} failed:`, proxyErr);
-          if (proxyUrl === proxies[proxies.length - 1]) {
-            // All proxies failed, fallback to direct
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = filename;
-            a.target = "_blank";
-            a.style.display = "none";
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            setTimeout(() => {
-              alert("⚠️ All proxies failed. Video opened in tab—right-click > 'Save as...' to download.");
-            }, 500);
+      console.error('Video download failed:', err);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.target = '_blank';
+      a.style.display = 'none';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }
+  };
+
+  const downloadSelectedVideos = async () => {
+    if (selectedVideos.length === 0) {
+      alert("Please select at least one video to download.");
+      return;
+    }
+    try {
+      if (selectedVideos.length === 1) {
+        const url = selectedVideos[0];
+        const filename = getFilenameFromUrl(url);
+        await downloadVideo(url, filename);
+      } else {
+        const zip = new JSZip();
+        const downloadPromises = selectedVideos.map(async (url, i) => {
+          try {
+            const blob = await getVideoBlob(url);
+            const filename = getFilenameFromUrl(url);
+            const ext = filename.includes('.') ? `.${filename.split('.').pop()}` : '.mp4';
+            const name = `video_${i + 1}${ext}`;
+            zip.file(name, blob);
+          } catch (err) {
+            console.error(`Failed to add ${url}:`, err);
           }
-        }
+        });
+        await Promise.all(downloadPromises);
+        const zipBlob = await zip.generateAsync({ type: 'blob' });
+        saveAs(zipBlob, 'selected_videos.zip');
       }
-      
-      if (blob) {
-        const blobUrl = window.URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = blobUrl;
-        a.download = filename;
-        a.style.display = "none";
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        setTimeout(() => window.URL.revokeObjectURL(blobUrl), 100);
-        alert("✅ Video downloaded successfully!");
-      }
+    } catch (err) {
+      console.error('Batch download failed:', err);
+    }
+  };
+
+  const handleVideoSelection = (url) => {
+    setSelectedVideos((prev) =>
+      prev.includes(url) ? prev.filter((img) => img !== url) : [...prev, url]
+    );
+  };
+
+  const handleSelectAll = (urls, type) => {
+    if (type === 'select') {
+      setSelectedVideos((prev) => [...new Set([...prev, ...urls])]);
+    } else {
+      setSelectedVideos((prev) => prev.filter((url) => !urls.includes(url)));
     }
   };
   // END: VIDEO DOWNLOAD FUNCTION
@@ -338,6 +374,7 @@ export const Screen4 = ({ response, setResponse, sharedData, setActiveTab, setSh
           });
           setResponse(null);
           setDone(false);
+          setSelectedVideos([]);
         }}
       >
         Clear Inputs
@@ -369,8 +406,8 @@ export const Screen4 = ({ response, setResponse, sharedData, setActiveTab, setSh
               accept="image/*"
               multiple
               onChange={handleFileUpload}
-              className="block w-full text-sm text-gray-300 file:mr-4 file:py-2 file:px-4 
-                         file:rounded-full file:border-0 file:text-sm file:font-semibold 
+              className="block w-full text-sm text-gray-300 file:mr-4 file:py-2 file:px-4
+                         file:rounded-full file:border-0 file:text-sm file:font-semibold
                          file:bg-blue-600 file:text-white hover:file:bg-blue-700"
             />
             {uploadedImages.length > 0 && (
@@ -390,56 +427,78 @@ export const Screen4 = ({ response, setResponse, sharedData, setActiveTab, setSh
         </div>
 
         {/* RIGHT COLUMN — Output preview */}
-        <div className="lg:col-span-2 space-y-6">        
-        {loading && (
-          <div
-            className="mt-6 p-6 bg-card rounded-md shadow-soft text-sm text-muted-foreground"
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: "10px",
-              maxHeight: "200px",
-            }}
-          >
-            <div style={{ fontSize: 18, fontWeight: 700 }}>⏳ IN QUEUE</div>
-            <div style={{ fontSize: 13, opacity: 0.9, textAlign: "center" }}>
-              Request received. Processing may take up to <strong>10–20 minutes</strong>.
-              The server is working — you can go to other screens, results will remain here when ready.
-            </div>
-            <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
-              <div style={{ width: 8, height: 8, borderRadius: 8, background: "#3b82f6", animation: "bounce 0.6s infinite alternate" }} />
-              <div style={{ width: 8, height: 8, borderRadius: 8, background: "#60a5fa", animation: "bounce 0.6s 0.15s infinite alternate" }} />
-              <div style={{ width: 8, height: 8, borderRadius: 8, background: "#93c5fd", animation: "bounce 0.6s 0.3s infinite alternate" }} />
-            </div>
+        <div className="lg:col-span-2 space-y-6">
+          {loading && (
+            <div
+              className="mt-6 p-6 bg-card rounded-md shadow-soft text-sm text-muted-foreground"
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "10px",
+                maxHeight: "200px",
+              }}
+            >
+              <div style={{ fontSize: 18, fontWeight: 700 }}>⏳ IN QUEUE</div>
+              <div style={{ fontSize: 13, opacity: 0.9, textAlign: "center" }}>
+                Request received. Processing may take up to <strong>10–20 minutes</strong>.
+                The server is working — you can go to other screens, results will remain here when ready.
+              </div>
+              <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+                <div style={{ width: 8, height: 8, borderRadius: 8, background: "#3b82f6", animation: "bounce 0.6s infinite alternate" }} />
+                <div style={{ width: 8, height: 8, borderRadius: 8, background: "#60a5fa", animation: "bounce 0.6s 0.15s infinite alternate" }} />
+                <div style={{ width: 8, height: 8, borderRadius: 8, background: "#93c5fd", animation: "bounce 0.6s 0.3s infinite alternate" }} />
+              </div>
 
-            {/* Small keyframe injected inline since we used style prop */}
-            <style>{`
-              @keyframes bounce {
-                from { transform: translateY(0); opacity: 1; }
-                to { transform: translateY(-6px); opacity: 0.7; }
-              }
-            `}</style>
-          </div>
-        )}
+              {/* Small keyframe injected inline since we used style prop */}
+              <style>{`
+                @keyframes bounce {
+                  from { transform: translateY(0); opacity: 1; }
+                  to { transform: translateY(-6px); opacity: 0.7; }
+                }
+              `}</style>
+            </div>
+          )}
 
-        {/* Video Previews */}
-        {response && !response.error && response[0]?.videoUrlsArray?.length > 0 && (
+          {/* Video Previews */}
+          {response && !response.error && response[0]?.videoUrlsArray?.length > 0 && (
             <div className="mt-4 bg-muted/40 border border-border/30 rounded-xl p-4 text-center shadow-sm">
-                <h3 className="text-sm font-medium mb-2 text-foreground/80">🎬 Generated Videos</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 justify-items-center">
+              <div className="flex justify-between items-center mb-2">
+                <h3 className="text-sm font-medium text-foreground/80">🎬 Generated Videos</h3>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={() => handleSelectAll(response[0].videoUrlsArray, 'select')}>Select All</Button>
+                  <Button variant="outline" size="sm" onClick={() => handleSelectAll(response[0].videoUrlsArray, 'deselect')}>Deselect All</Button>
+                  {selectedVideos.length > 0 && (
+                    <Button
+                      variant="default"
+                      size="sm"
+                      onClick={downloadSelectedVideos}
+                      style={{ background: "#10b981", color: "white" }}
+                    >
+                      Download Selected ({selectedVideos.length})
+                    </Button>
+                  )}
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 justify-items-center">
                 {response[0].videoUrlsArray.map((videoUrl, i) => (
-                    <div key={i} className="flex flex-col items-center gap-2">
+                  <div key={i} className="relative flex flex-col items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={selectedVideos.includes(videoUrl)}
+                      onChange={() => handleVideoSelection(videoUrl)}
+                      className="absolute top-2 left-2 h-5 w-5 z-10"
+                    />
                     <video
-                        src={videoUrl}
-                        controls
-                        style={{ width: "160px", height: "160px", objectFit: "cover" }}
-                        className="rounded-lg border border-border/20"
+                      src={videoUrl}
+                      controls
+                      style={{ width: "160px", height: "160px", objectFit: "cover" }}
+                      className="rounded-lg border border-border/20"
                     />
                     <button
-                        onClick={() => downloadVideo(videoUrl, `video_${i + 1}.mp4`)}
-                        style={{
+                      onClick={() => downloadVideo(videoUrl, `video_${i + 1}.mp4`)}
+                      style={{
                         padding: "4px 8px",
                         fontSize: "12px",
                         borderRadius: "6px",
@@ -447,14 +506,14 @@ export const Screen4 = ({ response, setResponse, sharedData, setActiveTab, setSh
                         color: "white",
                         border: "none",
                         cursor: "pointer",
-                        }}
-                        className="px-3 py-1 text-xs rounded-md bg-blue-500 text-white hover:bg-blue-600 transition-colors"
+                      }}
+                      className="px-3 py-1 text-xs rounded-md bg-blue-500 text-white hover:bg-blue-600 transition-colors"
                     >
-                        Download
+                      Download
                     </button>
-                    </div>
+                  </div>
                 ))}
-                </div>
+              </div>
             </div>
           )}
         </div>
@@ -463,54 +522,54 @@ export const Screen4 = ({ response, setResponse, sharedData, setActiveTab, setSh
       {/* Submit Button */}
       <div className="flex justify-center mt-10">
         {!done ? (
-        <Button
-          onClick={handleSubmit}
-          disabled={loading}
-          variant="default"
-          style={{
-                flex: 1,
-                textAlign: "center",
-                padding: "12px 16px",
-                borderRadius: "9999px",
-                fontWeight: 500,
-                cursor: loading ? "not-allowed" : "pointer",
-                transition: "all 0.3s",
-                background: "linear-gradient(to right, #3b82f6, #6366f1)",
-                color: "white",
-                border: "none",
-                outline: "none",
+          <Button
+            onClick={handleSubmit}
+            disabled={loading}
+            variant="default"
+            style={{
+              flex: 1,
+              textAlign: "center",
+              padding: "12px 16px",
+              borderRadius: "9999px",
+              fontWeight: 500,
+              cursor: loading ? "not-allowed" : "pointer",
+              transition: "all 0.3s",
+              background: "linear-gradient(to right, #3b82f6, #6366f1)",
+              color: "white",
+              border: "none",
+              outline: "none",
             }}
-        >
-          {loading ? "Uploading..." : "Generate with Images"}
-        </Button>
+          >
+            {loading ? "Uploading..." : "Generate with Images"}
+          </Button>
         ) : (
-        <Button
-          onClick={() => {
-                setSharedDataForScreen5({
+          <Button
+            onClick={() => {
+              setSharedDataForScreen5({
                 currentScript: formData.scripts,
                 winningAngle: "",
                 inspiration: "",
-                });
-                setActiveTab("screen5");
+              });
+              setActiveTab("screen5");
             }}
-          disabled={loading}
-          variant="default"
-          style={{
-            flex: 1,
-            textAlign: "center",
-            padding: "12px 16px",
-            borderRadius: "9999px",
-            fontWeight: 500,
-            cursor: "pointer",
-            transition: "all 0.3s",
-            background: "linear-gradient(to right, #6366f1, #10b981)",
-            color: "white",
-            border: "none",
-            outline: "none",
+            disabled={loading}
+            variant="default"
+            style={{
+              flex: 1,
+              textAlign: "center",
+              padding: "12px 16px",
+              borderRadius: "9999px",
+              fontWeight: 500,
+              cursor: "pointer",
+              transition: "all 0.3s",
+              background: "linear-gradient(to right, #6366f1, #10b981)",
+              color: "white",
+              border: "none",
+              outline: "none",
             }}
-        >
-          {loading ? "Uploading..." : "Go to Screen 5"}
-        </Button>
+          >
+            {loading ? "Uploading..." : "Go to Text to video"}
+          </Button>
         )}
       </div>
     </ScreenLayout>

@@ -3,6 +3,8 @@ import { ScreenLayout } from "@/components/ScreenLayout";
 import { InputSection } from "@/components/InputSection";
 import { Button } from "@/components/ui/button";
 import { generateJobId } from "@/lib/utils";
+import JSZip from 'jszip';
+import { saveAs } from 'file-saver';
 
 const Screen5URL = "https://wholesomegoods.app.n8n.cloud/webhook/c929805e-af8c-406b-8bd7-52fb517d01bf";
 // const Screen5URL = "https://wholesomegoods.app.n8n.cloud/webhook-test/c929805e-af8c-406b-8bd7-52fb517d01bf";
@@ -24,11 +26,10 @@ export const Screen5 = ({ response, setResponse, sharedData, setActiveTab, setSh
 
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
-  const JOB_STATE_KEY = "screen5JobState"; // { job_id, pollStartMs, loading, done }
-  const RESPONSE_KEY = "screen5Response"; // stringified JSON or string
+  const [selectedVideos, setSelectedVideos] = useState([]);
+  const JOB_STATE_KEY = "screen5JobState";
+  const RESPONSE_KEY = "screen5Response";
 
-  // This hook now safely populates the form from sharedData only if the fields are empty,
-  // preventing it from overwriting data restored from localStorage.
   useEffect(() => {
     if (sharedData) {
       setFormData((prev) => ({
@@ -44,12 +45,10 @@ export const Screen5 = ({ response, setResponse, sharedData, setActiveTab, setSh
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  // Auto-save to localStorage
   useEffect(() => {
     try { localStorage.setItem("screen5FormData", JSON.stringify(formData)); } catch (_) {}
   }, [formData]);
 
-  // Persist response and sync the 'done' state whenever the response changes.
   useEffect(() => {
     try {
       if (response && !response.error) {
@@ -57,7 +56,6 @@ export const Screen5 = ({ response, setResponse, sharedData, setActiveTab, setSh
           RESPONSE_KEY,
           typeof response === "string" ? response : JSON.stringify(response)
         );
-        // This is the key fix: ensures the button and output stay frozen.
         setDone(true);
       } else {
         setDone(false);
@@ -67,7 +65,6 @@ export const Screen5 = ({ response, setResponse, sharedData, setActiveTab, setSh
     }
   }, [response]);
 
-  // Restore response/done and resume polling if a job is pending on mount
   useEffect(() => {
     try {
       const savedState = localStorage.getItem(JOB_STATE_KEY);
@@ -79,7 +76,7 @@ export const Screen5 = ({ response, setResponse, sharedData, setActiveTab, setSh
       if (savedState) {
         const { job_id, pollStartMs, loading: wasLoading, done: wasDone } = JSON.parse(savedState);
         if (wasLoading && !wasDone && job_id) {
-          const pollTimeoutMs = 20 * 60 * 1000; // 20 minutes
+          const pollTimeoutMs = 20 * 60 * 1000;
           const pollIntervalMs = 2000;
           const pollStart = pollStartMs || Date.now();
           setLoading(true);
@@ -123,15 +120,12 @@ export const Screen5 = ({ response, setResponse, sharedData, setActiveTab, setSh
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // State for validation errors
   const [validationErrors, setValidationErrors] = useState({});
 
   const handleSubmit = async () => {    
-    // Validate required fields before submission
     const errors = {};
     let hasErrors = false;
     
-    // Check each required field in inputFields
     inputFields.forEach(field => {
       if (field.require && (!formData[field.name] || formData[field.name].trim() === '')) {
         errors[field.name] = `${field.label} is required`;
@@ -139,23 +133,20 @@ export const Screen5 = ({ response, setResponse, sharedData, setActiveTab, setSh
       }
     });
     
-    // If validation fails, update error state and stop submission
     if (hasErrors) {
       setValidationErrors(errors);
       return;
     }
     
-    // Clear any previous validation errors
     setValidationErrors({});
     setLoading(true);
     setResponse(null);
+    setDone(false);
+    setSelectedVideos([]);
     const job_id = generateJobId();
     const callback_url = `${window.location.origin}/callback`;
     const dataToSend = {
-        currentScript: formData.currentScript,
-        winningAngle: formData.winningAngle,
-        inspiration: formData.inspiration,
-        model: formData.model,
+        ...formData,
         job_id,
         callback_url,
     };
@@ -171,7 +162,7 @@ export const Screen5 = ({ response, setResponse, sharedData, setActiveTab, setSh
       }
       const pollStart = Date.now();
       try { localStorage.setItem(JOB_STATE_KEY, JSON.stringify({ job_id, pollStartMs: pollStart, loading: true, done: false })); } catch (_) {}
-      const pollTimeoutMs = 20 * 60 * 1000; // 20 minutes
+      const pollTimeoutMs = 20 * 60 * 1000;
       const pollIntervalMs = 2000;
       let resultData = null;
 
@@ -186,9 +177,7 @@ export const Screen5 = ({ response, setResponse, sharedData, setActiveTab, setSh
             console.log("✅ Data received from backend:", resultData);
             break;
           }
-        } catch (pollError) {
-          // Ignore intermittent polling errors
-        }
+        } catch (pollError) {}
         await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
       }
 
@@ -197,7 +186,7 @@ export const Screen5 = ({ response, setResponse, sharedData, setActiveTab, setSh
       } else {
         setResponse(
           typeof resultData === "string"
-            ? JSON.parse(resultData) // if backend sends a JSON string
+            ? JSON.parse(resultData)
             : resultData
         );
         setDone(true);
@@ -217,83 +206,111 @@ export const Screen5 = ({ response, setResponse, sharedData, setActiveTab, setSh
     }
   };
 
-  // START: VIDEO DOWNLOAD FUNCTION
+  // START: VIDEO DOWNLOAD FUNCTIONS
+  const getFilenameFromUrl = (url) => {
+    try {
+      const pathname = new URL(url).pathname;
+      const filename = pathname.split('/').pop();
+      return filename || 'downloaded_video.mp4';
+    } catch {
+      return 'downloaded_video.mp4';
+    }
+  };
+
+  const getVideoBlob = async (url) => {
+    try {
+      const res = await fetch(url, { mode: 'cors' });
+      if (!res.ok) throw new Error('Direct fetch failed');
+      const contentType = res.headers.get('content-type');
+      if (!contentType?.startsWith('video/')) throw new Error('Invalid content type');
+      return await res.blob();
+    } catch (e) {
+      console.warn("Direct fetch failed, trying proxies...", e);
+      const proxies = [
+        { base: 'https://api.allorigins.win/raw?url=' },
+        { base: 'https://corsproxy.io/?' },
+        { base: 'https://api.codetabs.com/v1/proxy?quest=' }
+      ];
+      const proxyPromises = proxies.map(async ({ base }) => {
+        try {
+          const proxyUrl = base + encodeURIComponent(url);
+          const res = await fetch(proxyUrl);
+          if (!res.ok) throw new Error(`Proxy ${base} failed`);
+          return await res.blob();
+        } catch {
+          throw new Error('Proxy failed');
+        }
+      });
+      return await Promise.any(proxyPromises);
+    }
+  };
+
   const downloadVideo = async (url, filename) => {
     try {
-      // Method 1: Try fetch with CORS
-      const response = await fetch(url, { mode: 'cors' });
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      
-      const blob = await response.blob();
-      
-      // Create a blob URL and trigger download
-      const blobUrl = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = blobUrl;
+      const blob = await getVideoBlob(url);
+      saveAs(blob, filename);
+    } catch (err) {
+      console.error('All download methods failed:', err);
+      const a = document.createElement('a');
+      a.href = url;
       a.download = filename;
-      a.style.display = "none";
+      a.target = '_blank';
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-  
-      // Cleanup
-      setTimeout(() => window.URL.revokeObjectURL(blobUrl), 100);
-      
-      // Show success message
-      alert("✅ Video downloaded successfully!");
-    } catch (err) {
-      console.error("CORS fetch failed:", err);
-      
-      // Method 2: Try multiple CORS proxies
-      const proxies = [
-        `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
-        `https://corsproxy.io/?${encodeURIComponent(url)}`,
-        `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`
-      ];
-      
-      let blob;
-      for (const proxyUrl of proxies) {
-        try {
-          const response = await fetch(proxyUrl);
-          if (!response.ok) throw new Error(`Proxy error: ${response.status}`);
-          blob = await response.blob();
-          break; // Success, exit loop
-        } catch (proxyErr) {
-          console.error(`Proxy ${proxyUrl} failed:`, proxyErr);
-          if (proxyUrl === proxies[proxies.length - 1]) {
-            // All proxies failed, fallback to direct
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = filename;
-            a.target = "_blank";
-            a.style.display = "none";
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            setTimeout(() => {
-              alert("⚠️ All proxies failed. Video opened in tab—right-click > 'Save as...' to download.");
-            }, 500);
-          }
-        }
-      }
-      
-      if (blob) {
-        const blobUrl = window.URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = blobUrl;
-        a.download = filename;
-        a.style.display = "none";
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        setTimeout(() => window.URL.revokeObjectURL(blobUrl), 100);
-        alert("✅ Video downloaded successfully!");
-      }
+      alert("Could not download directly. The video has been opened in a new tab. Please right-click and 'Save Video As...'");
     }
   };
-  // END: VIDEO DOWNLOAD FUNCTION
+
+  const downloadSelectedVideos = async () => {
+    if (selectedVideos.length === 0) {
+      alert("Please select at least one video to download.");
+      return;
+    }
+    if (selectedVideos.length === 1) {
+      const url = selectedVideos[0];
+      await downloadVideo(url, getFilenameFromUrl(url));
+      return;
+    }
+
+    alert(`Preparing to download ${selectedVideos.length} videos as a zip file. This may take a moment...`);
+    try {
+      const zip = new JSZip();
+      const downloadPromises = selectedVideos.map(async (url, i) => {
+        try {
+          const blob = await getVideoBlob(url);
+          const filename = getFilenameFromUrl(url);
+          const ext = filename.includes('.') ? `.${filename.split('.').pop()}` : '.mp4';
+          zip.file(`video_${i + 1}${ext}`, blob);
+        } catch (err) {
+          console.error(`Failed to fetch ${url} for zipping:`, err);
+          zip.file(`FAILED_video_${i + 1}.txt`, `Could not download video from: ${url}`);
+        }
+      });
+
+      await Promise.all(downloadPromises);
+      const zipBlob = await zip.generateAsync({ type: 'blob' });
+      saveAs(zipBlob, 'selected_videos.zip');
+    } catch (err) {
+      console.error('Batch download failed:', err);
+      alert('An error occurred while creating the zip file. Please try downloading them individually.');
+    }
+  };
+
+  const handleVideoSelection = (url) => {
+    setSelectedVideos((prev) =>
+      prev.includes(url) ? prev.filter((videoUrl) => videoUrl !== url) : [...prev, url]
+    );
+  };
+
+  const handleSelectAll = (urls, type) => {
+    if (type === 'select') {
+      setSelectedVideos((prev) => [...new Set([...prev, ...urls])]);
+    } else {
+      setSelectedVideos((prev) => prev.filter((url) => !urls.includes(url)));
+    }
+  };
+  // END: VIDEO DOWNLOAD FUNCTIONS
 
   const inputFields = [
     { label: "Current Script", name: "currentScript", placeholder: "Enter Current Script", type: "textarea", require: true },
@@ -333,6 +350,7 @@ export const Screen5 = ({ response, setResponse, sharedData, setActiveTab, setSh
           });
           setResponse(null);
           setDone(false);
+          setSelectedVideos([]);
         }}
       >
         Clear Inputs
@@ -374,8 +392,6 @@ export const Screen5 = ({ response, setResponse, sharedData, setActiveTab, setSh
                 <div style={{ width: 8, height: 8, borderRadius: 8, background: "#60a5fa", animation: "bounce 0.6s 0.15s infinite alternate" }} />
                 <div style={{ width: 8, height: 8, borderRadius: 8, background: "#93c5fd", animation: "bounce 0.6s 0.3s infinite alternate" }} />
               </div>
-
-              {/* Small keyframe injected inline since we used style prop */}
               <style>{`
                 @keyframes bounce {
                   from { transform: translateY(0); opacity: 1; }
@@ -386,27 +402,42 @@ export const Screen5 = ({ response, setResponse, sharedData, setActiveTab, setSh
           )}
           {response && !response.error && response[0]?.videoUrlsArray?.length > 0 && (
             <div className="mt-4 bg-muted/40 border border-border/30 rounded-xl p-4 text-center shadow-sm">
-              <h3 className="text-sm font-medium mb-2 text-foreground/80">🎬 Generated Videos</h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 justify-items-center">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-sm font-medium text-foreground/80">🎬 Generated Videos</h3>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={() => handleSelectAll(response[0].videoUrlsArray, 'select')}>Select All</Button>
+                  <Button variant="outline" size="sm" onClick={() => handleSelectAll(response[0].videoUrlsArray, 'deselect')}>Deselect All</Button>
+                  {selectedVideos.length > 0 && (
+                    <Button
+                      variant="default"
+                      size="sm"
+                      onClick={downloadSelectedVideos}
+                      style={{ background: "#10b981", color: "white" }}
+                    >
+                      Download Selected ({selectedVideos.length})
+                    </Button>
+                  )}
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 justify-items-center">
                 {response[0].videoUrlsArray.map((videoUrl, i) => (
-                  <div key={i} className="flex flex-col items-center gap-2">
+                  <div key={i} className="relative flex flex-col items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={selectedVideos.includes(videoUrl)}
+                      onChange={() => handleVideoSelection(videoUrl)}
+                      className="absolute top-2 left-2 h-5 w-5 z-10 cursor-pointer"
+                    />
                     <video
                       src={videoUrl}
                       controls
+                      loop
+                      playsInline
                       style={{ width: "160px", height: "160px", objectFit: "cover" }}
                       className="rounded-lg border border-border/20"
                     />
                     <button
                       onClick={() => downloadVideo(videoUrl, `video_${i + 1}.mp4`)}
-                      style={{
-                        padding: "8px 16px",
-                        fontSize: "12px",
-                        borderRadius: "6px",
-                        background: "#3b82f6",
-                        color: "white",
-                        border: "none",
-                        cursor: "pointer",
-                      }}
                       className="px-3 py-1 text-xs rounded-md bg-blue-500 text-white hover:bg-blue-600 transition-colors"
                     >
                       Download
@@ -438,12 +469,13 @@ export const Screen5 = ({ response, setResponse, sharedData, setActiveTab, setSh
                 border: "none",
                 outline: "none",
             }}>
-          {loading ? "Processing..." : "Generate"}
+          {loading ? "Processing..." : "✨ Generate"}
         </Button>
         ) : (
         <Button
           onClick={() => {
-              // No action needed here, as requested.
+              // Per your request, this button is now for display
+              // and doesn't navigate or change state.
             }}
             disabled={loading}
             variant="default"
