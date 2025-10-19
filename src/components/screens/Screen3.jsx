@@ -6,8 +6,8 @@ import { marked } from "marked";
 import { generateJobId } from "@/lib/utils";
 
 
-// const Screen3URL = "https://wholesomegoods.app.n8n.cloud/webhook/b6e95acd-b2c8-46fa-9a92-90ae55bc8a5f";
-const Screen3URL = "https://wholesomegoods.app.n8n.cloud/webhook-test/b6e95acd-b2c8-46fa-9a92-90ae55bc8a5f"
+const Screen3URL = "https://wholesomegoods.app.n8n.cloud/webhook/b6e95acd-b2c8-46fa-9a92-90ae55bc8a5f";
+// const Screen3URL = "https://wholesomegoods.app.n8n.cloud/webhook-test/b6e95acd-b2c8-46fa-9a92-90ae55bc8a5f"
 
 export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSharedDataForScreen4 }) => {
   const [activeTab] = useState("Images/Voice");
@@ -866,7 +866,7 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
                 outline: "none",
             }}
             >
-             Go to Screen 4
+             Go to Images to videos
             </Button>
         )}
         </div>

@@ -135,6 +135,84 @@ export const Screen6 = ({ setActiveTab, sharedDataForScreen6, setSharedDataForSc
     }
   };
 
+  // START: VIDEO DOWNLOAD FUNCTION
+  const downloadVideo = async (url, filename) => {
+    try {
+      // Method 1: Try fetch with CORS
+      const response = await fetch(url, { mode: 'cors' });
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const blob = await response.blob();
+      
+      // Create a blob URL and trigger download
+      const blobUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = filename;
+      a.style.display = "none";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+  
+      // Cleanup
+      setTimeout(() => window.URL.revokeObjectURL(blobUrl), 100);
+      
+      // Show success message
+      alert("✅ Video downloaded successfully!");
+    } catch (err) {
+      console.error("CORS fetch failed:", err);
+      
+      // Method 2: Try multiple CORS proxies
+      const proxies = [
+        `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+        `https://corsproxy.io/?${encodeURIComponent(url)}`,
+        `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`
+      ];
+      
+      let blob;
+      for (const proxyUrl of proxies) {
+        try {
+          const response = await fetch(proxyUrl);
+          if (!response.ok) throw new Error(`Proxy error: ${response.status}`);
+          blob = await response.blob();
+          break; // Success, exit loop
+        } catch (proxyErr) {
+          console.error(`Proxy ${proxyUrl} failed:`, proxyErr);
+          if (proxyUrl === proxies[proxies.length - 1]) {
+            // All proxies failed, fallback to direct
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = filename;
+            a.target = "_blank";
+            a.style.display = "none";
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            setTimeout(() => {
+              alert("⚠️ All proxies failed. Video opened in tab—right-click > 'Save as...' to download.");
+            }, 500);
+          }
+        }
+      }
+      
+      if (blob) {
+        const blobUrl = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = blobUrl;
+        a.download = filename;
+        a.style.display = "none";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => window.URL.revokeObjectURL(blobUrl), 100);
+        alert("✅ Video downloaded successfully!");
+      }
+    }
+  };
+  // END: VIDEO DOWNLOAD FUNCTION
+
   // Resume polling/restore state on mount
   useEffect(() => {
     try {
@@ -358,7 +436,7 @@ export const Screen6 = ({ setActiveTab, sharedDataForScreen6, setSharedDataForSc
                       className="rounded-lg border border-border/20"
                     />
                     <button
-                      onClick={() => handleDownload(videoUrl, i)}
+                      onClick={() => downloadVideo(videoUrl, `video_${i + 1}.mp4`)}
                       className="px-3 py-1 text-xs rounded-md bg-blue-500 text-white hover:bg-blue-600 transition-colors"
                     >
                       Download

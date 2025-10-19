@@ -281,7 +281,7 @@ export const MainScreen = ({ response, setResponse, loading, setLoading, done, s
               outline: "none",
             }}
           >
-            Go to Screen 2
+            Go to AIDA Script
           </Button>
         )}
       </div>

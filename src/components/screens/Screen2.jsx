@@ -552,7 +552,7 @@ export const Screen2 = ({ response, setResponse, sharedData, setActiveTab, setSh
                 outline: "none",
               }}
             >
-               Go to Screen 3
+               Go to Image-Voice Generation
             </Button>
             
             <Button
@@ -589,7 +589,7 @@ export const Screen2 = ({ response, setResponse, sharedData, setActiveTab, setSh
                 outline: "none",
               }}
             >
-               Go to Screen 5
+               Go to Text to Video
             </Button>
           </div>
         )}
