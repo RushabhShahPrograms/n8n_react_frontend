@@ -514,16 +514,26 @@ export const Screen2 = ({ response, setResponse, sharedData, setActiveTab, setSh
           <Button
             onClick={() => {
               const insightsMatch = response.match(/<h3>Based on Insights:<\/h3>([\s\S]*)/);
-                let insights = "";
-                if (insightsMatch) {
-                  const markdownText = insightsMatch[1];
-                  insights = `<h3>Based on Insights:</h3>` + marked(markdownText);
-                }
-              setSharedDataForScreen3({
+              let insights = "";
+              if (insightsMatch) {
+                const markdownText = insightsMatch[1];
+                insights = `<h3>Based on Insights:</h3>` + marked(markdownText);
+              }
+              
+              // Prepare a comprehensive data object for other screens
+              const dataToShare = {
+                // For Screen 3
                 insightsMatch: insights,
                 imgUrl: extractImageURLFromResponse(response),
-                currentScriptIndex:scriptList[currentScriptIndex],
-              });
+                currentScriptIndex: scriptList[currentScriptIndex],
+
+                // For Screen 5
+                currentScript: scriptList[currentScriptIndex],
+                winningAngle: formData.winningAngle,
+                inspiration: insights,
+              };
+
+              setSharedDataForScreen3(dataToShare);
               setActiveTab("screen3");
             }}
             variant="default"

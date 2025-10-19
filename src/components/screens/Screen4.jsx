@@ -4,8 +4,8 @@ import { InputSection } from "@/components/InputSection";
 import { Button } from "@/components/ui/button";
 import { generateJobId } from "@/lib/utils";
 
-const Screen4URL = "https://wholesomegoods.app.n8n.cloud/webhook/60ce0ddc-7e2e-42ef-b5f0-ac2511363667";
-// const Screen4URL = "https://wholesomegoods.app.n8n.cloud/webhook-test/60ce0ddc-7e2e-42ef-b5f0-ac2511363667";
+// const Screen4URL = "https://wholesomegoods.app.n8n.cloud/webhook/60ce0ddc-7e2e-42ef-b5f0-ac2511363667";
+const Screen4URL = "https://wholesomegoods.app.n8n.cloud/webhook-test/60ce0ddc-7e2e-42ef-b5f0-ac2511363667";
 
 export const Screen4 = ({ response, setResponse, sharedData, setActiveTab, setSharedDataForScreen5 }) => {
   const [activeTab] = useState("Images to videos");
@@ -140,15 +140,23 @@ export const Screen4 = ({ response, setResponse, sharedData, setActiveTab, setSh
   };
 
   // This hook populates the form from sharedData, but is careful not to overwrite
-  // existing data that might have been restored from localStorage.
+  // existing data that might have been restored from localStorage or user input.
   useEffect(() => {
+    const updates = {};
     if (sharedData?.currentScript && !formData.scripts) {
+      updates.scripts = sharedData.currentScript;
+    }
+    if (sharedData?.selectedImageUrls && !formData.imgUrls) {
+      updates.imgUrls = sharedData.selectedImageUrls.join('\n');
+    }
+
+    if (Object.keys(updates).length > 0) {
       setFormData((prev) => ({
         ...prev,
-        scripts: sharedData.currentScript,
+        ...updates,
       }));
     }
-  }, [sharedData, formData.scripts]);
+  }, [sharedData, formData.scripts, formData.imgUrls]);
 
   // Persist response when it changes and sync the 'done' state
   useEffect(() => {

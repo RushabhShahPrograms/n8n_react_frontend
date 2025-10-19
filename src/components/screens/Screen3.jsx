@@ -33,7 +33,8 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
   const [done, setDone] = useState(false);
   const [isWaitingToDisplay, setIsWaitingToDisplay] = useState(false);
   const [showResult, setShowResult] = useState(false);
-  const JOB_STATE_KEY = "screen3JobState"; // { job_id, pollStartMs, loading, done }
+  const [selectedImages, setSelectedImages] = useState([]); // State for selected images
+  const JOB_STATE_KEY = "screen3JobState"; // { job_id, pollStartMs, loading, done, waiting, waitStartMs }
   const RESPONSE_KEY = "screen3Response"; // stringified html or object
 
   const voiceStyle = ["Rachel-American-calm-young-female",
@@ -65,6 +66,17 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
+  useEffect(() => {
+    if (sharedData && Object.keys(sharedData).length > 0) {
+      setFormData((prev) => ({
+        ...prev,
+        scripts: sharedData.currentScriptIndex || prev.scripts,
+        insightsMatch: sharedData.insightsMatch || prev.insightsMatch,
+        imgUrl: sharedData.imgUrl || prev.imgUrl,
+      }));
+    }
+  }, [sharedData]);
+
   // Auto-save to localStorage
   useEffect(() => {
     try { localStorage.setItem("screen3FormData", JSON.stringify(formData)); } catch (_) {}
@@ -78,6 +90,22 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
       }
     } catch (_) {}
   }, [response]);
+
+  // Handle image selection
+  const handleImageSelection = (url) => {
+    setSelectedImages((prev) =>
+      prev.includes(url) ? prev.filter((img) => img !== url) : [...prev, url]
+    );
+  };
+
+  // Handle select/deselect all
+  const handleSelectAll = (urls, type) => {
+    if (type === 'select') {
+      setSelectedImages((prev) => [...new Set([...prev, ...urls])]);
+    } else {
+      setSelectedImages((prev) => prev.filter((url) => !urls.includes(url)));
+    }
+  };
 
   // Helper: polling loop (resumable)
   const resumePolling = async (job_id, existingPollStartMs) => {
@@ -102,9 +130,23 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
             setDone(true);
             setIsWaitingToDisplay(true);
             try { localStorage.setItem(RESPONSE_KEY, typeof resultData === "string" ? resultData : JSON.stringify(resultData)); } catch (_) {}
+
+            const waitStart = Date.now();
+            // FIX: Persist the waiting state
+            try {
+                localStorage.setItem(JOB_STATE_KEY, JSON.stringify({ job_id, pollStartMs: pollStart, loading: false, done: true, waiting: true, waitStartMs: waitStart }));
+            } catch (_) {}
+
             setTimeout(() => {
                 setIsWaitingToDisplay(false);
                 setShowResult(true);
+                // FIX: Update localStorage to reflect that waiting is over
+                try {
+                    const savedState = JSON.parse(localStorage.getItem(JOB_STATE_KEY));
+                    if (savedState && savedState.job_id === job_id) {
+                        localStorage.setItem(JOB_STATE_KEY, JSON.stringify({ ...savedState, waiting: false }));
+                    }
+                } catch (_) {}
             }, 60000); // 1 minute delay
           }
           break;
@@ -114,14 +156,15 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
     }
 
     setLoading(false);
-    try { localStorage.removeItem(JOB_STATE_KEY); } catch (_) {}
+    // Do not remove JOB_STATE_KEY here, it's needed for state restoration
   };
 
   // On mount: restore job state/response and resume if needed
   useEffect(() => {
     try {
-      const savedState = localStorage.getItem(JOB_STATE_KEY);
+      const savedStateJSON = localStorage.getItem(JOB_STATE_KEY);
       const savedResponse = localStorage.getItem(RESPONSE_KEY);
+
       if (savedResponse && !response) {
         try {
           setResponse(JSON.parse(savedResponse));
@@ -129,16 +172,36 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
           setResponse(savedResponse);
         }
         setDone(true);
-        setShowResult(true); // Show immediately if already loaded
       }
-      if (savedState) {
-        const { job_id, pollStartMs, loading: wasLoading, done: wasDone } = JSON.parse(savedState);
-        if (wasLoading && !wasDone && job_id) {
+
+      if (savedStateJSON) {
+        const savedState = JSON.parse(savedStateJSON);
+        const { job_id, pollStartMs, loading: wasLoading, done: wasDone, waiting: wasWaiting, waitStartMs } = savedState;
+
+        if (wasLoading && !wasDone) {
           resumePolling(job_id, pollStartMs);
-        } else if (wasDone && savedResponse) {
-          setDone(true);
+        } else if (wasDone && wasWaiting) {
+          const elapsed = Date.now() - waitStartMs;
+          const remaining = 60000 - elapsed;
+
+          if (remaining > 0) {
+            setIsWaitingToDisplay(true);
+            setTimeout(() => {
+              setIsWaitingToDisplay(false);
+              setShowResult(true);
+              try {
+                localStorage.setItem(JOB_STATE_KEY, JSON.stringify({ ...savedState, waiting: false }));
+              } catch (_) {}
+            }, remaining);
+          } else {
+            setIsWaitingToDisplay(false);
+            setShowResult(true);
+          }
+        } else if (wasDone && !wasWaiting) {
           setShowResult(true);
         }
+      } else if (savedResponse) {
+        setShowResult(true);
       }
     } catch (_) {}
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -232,9 +295,23 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
         setDone(true);
         setIsWaitingToDisplay(true);
         try { localStorage.setItem(RESPONSE_KEY, typeof resultData === "string" ? resultData : JSON.stringify(resultData)); } catch (_) {}
+
+        const waitStart = Date.now();
+        // FIX: Persist the waiting state
+        try {
+            localStorage.setItem(JOB_STATE_KEY, JSON.stringify({ job_id, pollStartMs: pollStart, loading: false, done: true, waiting: true, waitStartMs: waitStart }));
+        } catch (_) {}
+
         setTimeout(() => {
             setIsWaitingToDisplay(false);
             setShowResult(true);
+            // FIX: Update localStorage to reflect that waiting is over
+            try {
+                const savedState = JSON.parse(localStorage.getItem(JOB_STATE_KEY));
+                if (savedState && savedState.job_id === job_id) {
+                    localStorage.setItem(JOB_STATE_KEY, JSON.stringify({ ...savedState, waiting: false }));
+                }
+            } catch (_) {}
         }, 60000); // 1 minute delay
       }
     } catch (err) {
@@ -242,7 +319,6 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
       setResponse({ error: `Failed: ${err.message}` });
     } finally {
       setLoading(false);
-      try { localStorage.removeItem(JOB_STATE_KEY); } catch (_) {}
     }
   };
 
@@ -271,13 +347,9 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
     }
     };
 
-  // This hook now correctly syncs the `done` and `showResult` states with the response.
   useEffect(() => {
     if (response && !response.error) {
       setDone(true);
-      // This is the key fix: If a valid response exists, always ensure
-      // the results are shown. This handles re-mounting the component.
-      setShowResult(true);
     } else {
       setDone(false);
       setShowResult(false);
@@ -310,7 +382,7 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
 
     setScriptList([...scripts, insights].filter(Boolean));
     setCurrentScriptIndex(0);
-  }, [response, sharedData]);
+  }, [response]);
 
   return (
     <ScreenLayout>
@@ -349,6 +421,7 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
             setDone(false);
             setShowResult(false);
             setIsWaitingToDisplay(false);
+            setSelectedImages([]);
           }}
         >
           Clear Inputs
@@ -372,7 +445,7 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
 
             {/* RIGHT COLUMN — optional extra content */}
             <div className="lg:col-span-2 space-y-6">
-              {loading && (
+              {loading ? (
                 <div
                   className="mt-6 p-6 bg-card rounded-md shadow-soft text-sm text-muted-foreground"
                   style={{
@@ -394,8 +467,6 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
                     <div style={{ width: 8, height: 8, borderRadius: 8, background: "#60a5fa", animation: "bounce 0.6s 0.15s infinite alternate" }} />
                     <div style={{ width: 8, height: 8, borderRadius: 8, background: "#93c5fd", animation: "bounce 0.6s 0.3s infinite alternate" }} />
                   </div>
-
-                  {/* Small keyframe injected inline since we used style prop */}
                   <style>{`
                     @keyframes bounce {
                       from { transform: translateY(0); opacity: 1; }
@@ -403,148 +474,171 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
                     }
                   `}</style>
                 </div>
-              )}
-              {isWaitingToDisplay && (
+              ) : isWaitingToDisplay ? (
                  <div className="mt-6 p-6 bg-card rounded-md shadow-soft text-sm text-muted-foreground text-center">
                     <div style={{ fontSize: 18, fontWeight: 700 }}>✅ Processing Complete!</div>
                     <div style={{ fontSize: 13, opacity: 0.9, marginTop: '8px' }}>
                         Displaying results in 1 minute...
                     </div>
                  </div>
-              )}
-              {/* Product Images */}
-              {showResult && response && !response.error && (() => {
-                // Product Images
-                const html = getHtmlFromResponse(response);
-                const productImages = (() => {
-                    const sectionMatch = html.match(/<h3>Generated Product Image URLs:<\/h3>([\s\S]*?)(<h3>|$)/i);
-                    if (!sectionMatch) return [];
-                    return Array.from(sectionMatch[1].matchAll(/<li>(https?:\/\/[^\s<]+)<\/li>/gi), m => m[1]);
-                    })();
+              ) : showResult && response && !response.error ? (
+                <>
+                  {/* Product Images */}
+                  {(() => {
+                    const html = getHtmlFromResponse(response);
+                    const productImages = (() => {
+                        const sectionMatch = html.match(/<h3>Generated Product Image URLs:<\/h3>([\s\S]*?)(<h3>|$)/i);
+                        if (!sectionMatch) return [];
+                        return Array.from(sectionMatch[1].matchAll(/<li>(https?:\/\/[^\s<]+)<\/li>/gi), m => m[1]);
+                        })();
 
-                if (!productImages.length) return null;
+                    if (!productImages.length) return null;
 
-                return (
-                <div className="mt-4 bg-muted/40 border border-border/30 rounded-xl p-4 text-center shadow-sm">
-                    <h3 className="text-sm font-medium mb-2 text-foreground/80">🖼️ Product Images</h3>
-                    <div className="flex flex-wrap justify-center gap-3">
-                    {productImages.map((imgUrl, index) => (
-                        <div key={index} className="flex flex-col items-center gap-2">
-                        <img
-                            src={imgUrl}
-                            alt={`Product ${index + 1}`}
-                            style={{ width: "120px", height: "120px", objectFit: "cover" }}
-                            className="rounded-lg border border-border/30 shadow-md hover:scale-105 transition-transform duration-300 cursor-pointer"
-                        />
-                        <button
-                            onClick={() => downloadImage(imgUrl, `product_image_${index + 1}.png`)}
-                            style={{
-                                padding: "4px 8px",
-                                fontSize: "12px",
-                                borderRadius: "6px",
-                                background: "#3b82f6",
-                                color: "white",
-                                border: "none",
-                                cursor: "pointer",
-                                }}
-                            className="px-3 py-1 text-xs rounded-md bg-blue-500 text-white hover:bg-blue-600 transition-colors"
-                        >
-                            Download
-                        </button>
+                    return (
+                    <div className="mt-4 bg-muted/40 border border-border/30 rounded-xl p-4 text-center shadow-sm">
+                        <div className="flex justify-between items-center mb-2">
+                            <h3 className="text-sm font-medium text-foreground/80">🖼️ Product Images</h3>
+                            <div className="flex gap-2">
+                                <Button variant="outline" size="sm" onClick={() => handleSelectAll(productImages, 'select')}>Select All</Button>
+                                <Button variant="outline" size="sm" onClick={() => handleSelectAll(productImages, 'deselect')}>Deselect All</Button>
+                            </div>
                         </div>
-                    ))}
-                    </div>
-                </div>
-                );
-            })()}
-
-            {/* Lifestyle Images */}
-            {showResult && response && !response.error && (() => {
-                const html = getHtmlFromResponse(response);
-                const lifestyleImages = (() => {
-                    const sectionMatch = html.match(/<h3>Generated LifeStyle Image URLs:<\/h3>([\s\S]*?)(<h3>|$)/i);
-                    if (!sectionMatch) return [];
-                    return Array.from(sectionMatch[1].matchAll(/<li>(https?:\/\/[^\s<]+)<\/li>/gi), m => m[1]);
-                    })();
-
-
-                if (!lifestyleImages.length) return null;
-
-                return (
-                <div className="mt-4 bg-muted/40 border border-border/30 rounded-xl p-4 text-center shadow-sm">
-                    <h3 className="text-sm font-medium mb-2 text-foreground/80">🌟 Lifestyle Images</h3>
-                    <div className="flex flex-wrap justify-center gap-3">
-                    {lifestyleImages.map((imgUrl, index) => (
-                        <div key={index} className="flex flex-col items-center gap-2">
-                        <img
-                            src={imgUrl}
-                            alt={`Lifestyle ${index + 1}`}
-                            style={{ width: "120px", height: "120px", objectFit: "cover" }}
-                            className="rounded-lg border border-border/30 shadow-md hover:scale-105 transition-transform duration-300 cursor-pointer"
-                        />
-                        <button
-                            onClick={() => downloadImage(imgUrl, `lifestyle_image_${index + 1}.png`)}
-                            style={{
-                                padding: "4px 8px",
-                                fontSize: "12px",
-                                borderRadius: "6px",
-                                background: "#3b82f6",
-                                color: "white",
-                                border: "none",
-                                cursor: "pointer",
-                                }}
-                            className="px-3 py-1 text-xs rounded-md bg-blue-500 text-white hover:bg-blue-600 transition-colors"
-                        >
-                            Download
-                        </button>
+                        <div className="flex flex-wrap justify-center gap-3">
+                        {productImages.map((imgUrl, index) => (
+                            <div key={index} className="relative flex flex-col items-center gap-2">
+                            <input
+                                type="checkbox"
+                                checked={selectedImages.includes(imgUrl)}
+                                onChange={() => handleImageSelection(imgUrl)}
+                                className="absolute top-2 left-2 h-5 w-5 z-10"
+                            />
+                            <img
+                                src={imgUrl}
+                                alt={`Product ${index + 1}`}
+                                style={{ width: "120px", height: "120px", objectFit: "cover" }}
+                                className="rounded-lg border border-border/30 shadow-md hover:scale-105 transition-transform duration-300 cursor-pointer"
+                            />
+                            <button
+                                onClick={() => downloadImage(imgUrl, `product_image_${index + 1}.png`)}
+                                style={{
+                                    padding: "4px 8px",
+                                    fontSize: "12px",
+                                    borderRadius: "6px",
+                                    background: "#3b82f6",
+                                    color: "white",
+                                    border: "none",
+                                    cursor: "pointer",
+                                    }}
+                                className="px-3 py-1 text-xs rounded-md bg-blue-500 text-white hover:bg-blue-600 transition-colors"
+                            >
+                                Download
+                            </button>
+                            </div>
+                        ))}
                         </div>
-                    ))}
                     </div>
-                </div>
-                );
-            })()}
+                    );
+                  })()}
 
-            {/* VoiceOver */}
-            {showResult && response && !response.error && (() => {
-                const html = getHtmlFromResponse(response);
-                const voiceUrl = (() => {
-                    const sectionMatch = html.match(/<h3>Generated Voice URL:<\/h3>([\s\S]*?)(<h3>|$)/i);
-                    if (!sectionMatch) return null;
-                    const urlMatch = sectionMatch[1].match(/https?:\/\/[^\s<]+/i);
-                    return urlMatch ? urlMatch[0] : null;
-                    })();
+                  {/* Lifestyle Images */}
+                  {(() => {
+                    const html = getHtmlFromResponse(response);
+                    const lifestyleImages = (() => {
+                        const sectionMatch = html.match(/<h3>Generated LifeStyle Image URLs:<\/h3>([\s\S]*?)(<h3>|$)/i);
+                        if (!sectionMatch) return [];
+                        return Array.from(sectionMatch[1].matchAll(/<li>(https?:\/\/[^\s<]+)<\/li>/gi), m => m[1]);
+                        })();
 
-                if (!voiceUrl) return null;
+                    if (!lifestyleImages.length) return null;
 
-                return (
-                <div className="mt-4 bg-muted/40 border border-border/30 rounded-xl p-4 text-center shadow-sm">
-                    <h3 className="text-sm font-medium mb-2 text-foreground/80">🎤 VoiceOver</h3>
-                    <audio controls className="w-full mt-2">
-                    <source src={voiceUrl} type="audio/mpeg" />
-                    Your browser does not support the audio element.
-                    </audio>
-                    <button
-                    onClick={() => window.open(voiceUrl, "_blank")}
-                    style={{
-                          padding: "4px 8px",
-                          fontSize: "12px",
-                          borderRadius: "6px",
-                          background: "#3b82f6",
-                          color: "white",
-                          border: "none",
-                          cursor: "pointer",
-                        }}
-                    >
-                    Download Voice
-                    </button>
-                </div>
-                );
-            })()}
-            {response && response.error && (
-                <div className="mt-6 p-6 bg-card rounded-md shadow-soft text-sm text-red-500">
-                {response.error}
-                </div>
-            )}
+                    return (
+                    <div className="mt-4 bg-muted/40 border border-border/30 rounded-xl p-4 text-center shadow-sm">
+                        <div className="flex justify-between items-center mb-2">
+                            <h3 className="text-sm font-medium text-foreground/80">🌟 Lifestyle Images</h3>
+                            <div className="flex gap-2">
+                                <Button variant="outline" size="sm" onClick={() => handleSelectAll(lifestyleImages, 'select')}>Select All</Button>
+                                <Button variant="outline" size="sm" onClick={() => handleSelectAll(lifestyleImages, 'deselect')}>Deselect All</Button>
+                            </div>
+                        </div>
+                        <div className="flex flex-wrap justify-center gap-3">
+                        {lifestyleImages.map((imgUrl, index) => (
+                            <div key={index} className="relative flex flex-col items-center gap-2">
+                            <input
+                                type="checkbox"
+                                checked={selectedImages.includes(imgUrl)}
+                                onChange={() => handleImageSelection(imgUrl)}
+                                className="absolute top-2 left-2 h-5 w-5 z-10"
+                            />
+                            <img
+                                src={imgUrl}
+                                alt={`Lifestyle ${index + 1}`}
+                                style={{ width: "120px", height: "120px", objectFit: "cover" }}
+                                className="rounded-lg border border-border/30 shadow-md hover:scale-105 transition-transform duration-300 cursor-pointer"
+                            />
+                            <button
+                                onClick={() => downloadImage(imgUrl, `lifestyle_image_${index + 1}.png`)}
+                                style={{
+                                    padding: "4px 8px",
+                                    fontSize: "12px",
+                                    borderRadius: "6px",
+                                    background: "#3b82f6",
+                                    color: "white",
+                                    border: "none",
+                                    cursor: "pointer",
+                                    }}
+                                className="px-3 py-1 text-xs rounded-md bg-blue-500 text-white hover:bg-blue-600 transition-colors"
+                            >
+                                Download
+                            </button>
+                            </div>
+                        ))}
+                        </div>
+                    </div>
+                    );
+                  })()}
+
+                  {/* VoiceOver */}
+                  {(() => {
+                    const html = getHtmlFromResponse(response);
+                    const voiceUrl = (() => {
+                        const sectionMatch = html.match(/<h3>Generated Voice URL:<\/h3>([\s\S]*?)(<h3>|$)/i);
+                        if (!sectionMatch) return null;
+                        const urlMatch = sectionMatch[1].match(/https?:\/\/[^\s<]+/i);
+                        return urlMatch ? urlMatch[0] : null;
+                        })();
+
+                    if (!voiceUrl) return null;
+
+                    return (
+                    <div className="mt-4 bg-muted/40 border border-border/30 rounded-xl p-4 text-center shadow-sm">
+                        <h3 className="text-sm font-medium mb-2 text-foreground/80">🎤 VoiceOver</h3>
+                        <audio controls className="w-full mt-2">
+                        <source src={voiceUrl} type="audio/mpeg" />
+                        Your browser does not support the audio element.
+                        </audio>
+                        <button
+                        onClick={() => window.open(voiceUrl, "_blank")}
+                        style={{
+                              padding: "4px 8px",
+                              fontSize: "12px",
+                              borderRadius: "6px",
+                              background: "#3b82f6",
+                              color: "white",
+                              border: "none",
+                              cursor: "pointer",
+                            }}
+                        >
+                        Download Voice
+                        </button>
+                    </div>
+                    );
+                  })()}
+                </>
+              ) : response && response.error ? (
+                  <div className="mt-6 p-6 bg-card rounded-md shadow-soft text-sm text-red-500">
+                  {response.error}
+                  </div>
+              ) : null}
             </div>
         </div><br/>
 
@@ -582,6 +676,7 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
             onClick={() => {
                 setSharedDataForScreen4({
                 currentScript: formData.scripts,
+                selectedImageUrls: selectedImages,
                 });
                 setActiveTab("screen4");
             }}
