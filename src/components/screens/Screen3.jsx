@@ -35,6 +35,7 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
   const [isWaitingToDisplay, setIsWaitingToDisplay] = useState(false);
   const [showResult, setShowResult] = useState(false);
   const [selectedImages, setSelectedImages] = useState([]);
+  const [loadingDownloads, setLoadingDownloads] = useState([]);
   const JOB_STATE_KEY = "screen3JobState";
   const RESPONSE_KEY = "screen3Response";
 
@@ -133,6 +134,7 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
   };
 
   const downloadAudio = async (url, filename) => {
+    setLoadingDownloads(prev => [...prev, url]);
     try {
       const blob = await getAudioBlob(url);
       const blobUrl = URL.createObjectURL(blob);
@@ -154,6 +156,8 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
+    } finally {
+      setLoadingDownloads(prev => prev.filter(item => item !== url));
     }
   };
 
@@ -182,6 +186,7 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
   };
 
   const downloadImage = async (url, filename) => {
+    setLoadingDownloads(prev => [...prev, url]);
     try {
       const blob = await getImageBlob(url);
       const blobUrl = URL.createObjectURL(blob);
@@ -203,6 +208,8 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
+    } finally {
+      setLoadingDownloads(prev => prev.filter(item => item !== url));
     }
   };
 
@@ -211,6 +218,7 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
       alert("Please select at least one image to download.");
       return;
     }
+    setLoadingDownloads(prev => [...prev, 'zip']);
     try {
       if (selectedImages.length === 1) {
         const url = selectedImages[0];
@@ -235,6 +243,8 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
       }
     } catch (err) {
       console.error('Batch download failed:', err);
+    } finally {
+      setLoadingDownloads(prev => prev.filter(item => item !== 'zip'));
     }
   };
 
@@ -599,8 +609,9 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
                             size="sm"
                             onClick={downloadSelectedImages}
                             style={{ background: "#10b981", color: "white" }}
+                            disabled={loadingDownloads.includes('zip')}
                           >
-                            Download Selected ({selectedImages.length})
+                            {loadingDownloads.includes('zip') ? 'Zipping...' : `Download Selected (${selectedImages.length})`}
                           </Button>
                         )}
                       </div>
@@ -632,8 +643,9 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
                               cursor: "pointer",
                             }}
                             className="px-3 py-1 text-xs rounded-md bg-blue-500 text-white hover:bg-blue-600 transition-colors"
+                            disabled={loadingDownloads.includes(imgUrl)}
                           >
-                            Download
+                            {loadingDownloads.includes(imgUrl) ? 'Downloading...' : 'Download'}
                           </button>
                         </div>
                       ))}
@@ -665,8 +677,9 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
                             size="sm"
                             onClick={downloadSelectedImages}
                             style={{ background: "#10b981", color: "white" }}
+                            disabled={loadingDownloads.includes('zip')}
                           >
-                            Download Selected ({selectedImages.length})
+                            {loadingDownloads.includes('zip') ? 'Zipping...' : `Download Selected (${selectedImages.length})`}
                           </Button>
                         )}
                       </div>
@@ -698,8 +711,9 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
                               cursor: "pointer",
                             }}
                             className="px-3 py-1 text-xs rounded-md bg-blue-500 text-white hover:bg-blue-600 transition-colors"
+                            disabled={loadingDownloads.includes(imgUrl)}
                           >
-                            Download
+                            {loadingDownloads.includes(imgUrl) ? 'Downloading...' : 'Download'}
                           </button>
                         </div>
                       ))}
@@ -737,8 +751,9 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
                         border: "none",
                         cursor: "pointer",
                       }}
+                      disabled={loadingDownloads.includes(voiceUrl)}
                     >
-                      Download Voice
+                      {loadingDownloads.includes(voiceUrl) ? 'Downloading...' : 'Download Voice'}
                     </button>
                   </div>
                 );

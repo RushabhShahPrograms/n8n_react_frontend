@@ -27,6 +27,7 @@ export const Screen6 = ({ setActiveTab, sharedDataForScreen6, setSharedDataForSc
   const [done, setDone] = useState(false);
   const [response, setResponse] = useState(null);
   const [selectedVideos, setSelectedVideos] = useState([]);
+  const [loadingDownloads, setLoadingDownloads] = useState([]); // To track download status
   const JOB_STATE_KEY = "screen6JobState"; // { job_id, pollStartMs, loading, done }
   const RESPONSE_KEY = "screen6Response"; // stringified JSON or string
   const fileInputRef = useRef(null);
@@ -103,7 +104,7 @@ export const Screen6 = ({ setActiveTab, sharedDataForScreen6, setSharedDataForSc
         try {
           const pollUrl = `${window.location.origin}/result/${job_id}`;
           const r = await fetch(pollUrl);
-          
+
           if (r.status === 200) {
             const json = await r.json();
             resultData = json?.result ?? null;
@@ -183,6 +184,7 @@ export const Screen6 = ({ setActiveTab, sharedDataForScreen6, setSharedDataForSc
   };
 
   const downloadVideo = async (url, filename) => {
+    setLoadingDownloads(prev => [...prev, url]);
     try {
       const blob = await getVideoBlob(url);
       saveAs(blob, filename);
@@ -197,6 +199,8 @@ export const Screen6 = ({ setActiveTab, sharedDataForScreen6, setSharedDataForSc
       a.click();
       document.body.removeChild(a);
       alert("Could not download directly. The video has been opened in a new tab. Please right-click and 'Save Video As...'");
+    } finally {
+      setLoadingDownloads(prev => prev.filter(item => item !== url));
     }
   };
 
@@ -211,7 +215,7 @@ export const Screen6 = ({ setActiveTab, sharedDataForScreen6, setSharedDataForSc
       return;
     }
 
-    alert(`Preparing to download ${selectedVideos.length} videos as a zip file. This may take a moment...`);
+    setLoadingDownloads(prev => [...prev, 'zip']);
     try {
       const zip = new JSZip();
       const downloadPromises = selectedVideos.map(async (url, i) => {
@@ -222,7 +226,6 @@ export const Screen6 = ({ setActiveTab, sharedDataForScreen6, setSharedDataForSc
           zip.file(`video_${i + 1}${ext}`, blob);
         } catch (err) {
           console.error(`Failed to fetch ${url} for zipping:`, err);
-          // Optionally, add a text file to the zip indicating which file failed.
           zip.file(`FAILED_video_${i + 1}.txt`, `Could not download video from: ${url}`);
         }
       });
@@ -233,6 +236,8 @@ export const Screen6 = ({ setActiveTab, sharedDataForScreen6, setSharedDataForSc
     } catch (err) {
       console.error('Batch download failed:', err);
       alert('An error occurred while creating the zip file. Please try downloading the videos individually.');
+    } finally {
+      setLoadingDownloads(prev => prev.filter(item => item !== 'zip'));
     }
   };
 
@@ -378,8 +383,8 @@ export const Screen6 = ({ setActiveTab, sharedDataForScreen6, setSharedDataForSc
               accept="image/*"
               ref={fileInputRef}
               onChange={handleFileUpload}
-              className="block w-full text-sm text-gray-300 file:mr-4 file:py-2 file:px-4 
-                         file:rounded-full file:border-0 file:text-sm file:font-semibold 
+              className="block w-full text-sm text-gray-300 file:mr-4 file:py-2 file:px-4
+                         file:rounded-full file:border-0 file:text-sm file:font-semibold
                          file:bg-purple-600 file:text-white hover:file:bg-purple-700"
             />
             {uploadedImage && (
@@ -420,7 +425,7 @@ export const Screen6 = ({ setActiveTab, sharedDataForScreen6, setSharedDataForSc
             onChange={handleInputChange}
             values={formData}
           />
-          
+
           <InputSection
             title="Animation Prompt"
             fields={[
@@ -475,7 +480,6 @@ export const Screen6 = ({ setActiveTab, sharedDataForScreen6, setSharedDataForSc
                   🎬 Generated Videos ({response[0].videoUrlsArray.length})
                 </h3>
                 <div className="flex gap-2">
-                  {/* Updated filter logic to prevent crash */}
                   <Button variant="outline" size="sm" onClick={() => handleSelectAll(response[0].videoUrlsArray.filter(url => typeof url === 'string' && url.startsWith('http')), 'select')}>Select All</Button>
                   <Button variant="outline" size="sm" onClick={() => handleSelectAll(response[0].videoUrlsArray, 'deselect')}>Deselect All</Button>
                   {selectedVideos.length > 0 && (
@@ -484,15 +488,15 @@ export const Screen6 = ({ setActiveTab, sharedDataForScreen6, setSharedDataForSc
                       size="sm"
                       onClick={downloadSelectedVideos}
                       style={{ background: "#10b981", color: "white" }}
+                      disabled={loadingDownloads.includes('zip')}
                     >
-                      Download Selected ({selectedVideos.length})
+                      {loadingDownloads.includes('zip') ? 'Zipping...' : `Download Selected (${selectedVideos.length})`}
                     </Button>
                   )}
                 </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 justify-items-center">
                 {response[0].videoUrlsArray.map((videoUrl, i) => {
-                  // This check now handles both strings and numbers safely
                   const isError = typeof videoUrl !== 'string' || !videoUrl.startsWith('http');
 
                   return (
@@ -526,8 +530,9 @@ export const Screen6 = ({ setActiveTab, sharedDataForScreen6, setSharedDataForSc
                           <button
                             onClick={() => downloadVideo(videoUrl, `video_${i + 1}.mp4`)}
                             className="px-3 py-1 text-xs rounded-md bg-blue-500 text-white hover:bg-blue-600 transition-colors"
+                            disabled={loadingDownloads.includes(videoUrl)}
                           >
-                            Download
+                            {loadingDownloads.includes(videoUrl) ? 'Downloading...' : 'Download'}
                           </button>
                         </>
                       )}
@@ -537,55 +542,6 @@ export const Screen6 = ({ setActiveTab, sharedDataForScreen6, setSharedDataForSc
               </div>
             </div>
           )}
-          {/* {response && !response.error && response[0]?.videoUrlsArray?.length > 0 && (
-            <div className="mt-4 bg-muted/40 border border-border/30 rounded-xl p-4 text-center shadow-sm">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-sm font-medium text-foreground/80">
-                  🎬 Generated Videos ({response[0].videoUrlsArray.length})
-                </h3>
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={() => handleSelectAll(response[0].videoUrlsArray, 'select')}>Select All</Button>
-                  <Button variant="outline" size="sm" onClick={() => handleSelectAll(response[0].videoUrlsArray, 'deselect')}>Deselect All</Button>
-                  {selectedVideos.length > 0 && (
-                    <Button
-                      variant="default"
-                      size="sm"
-                      onClick={downloadSelectedVideos}
-                      style={{ background: "#10b981", color: "white" }}
-                    >
-                      Download Selected ({selectedVideos.length})
-                    </Button>
-                  )}
-                </div>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 justify-items-center">
-                {response[0].videoUrlsArray.map((videoUrl, i) => (
-                  <div key={i} className="relative flex flex-col items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={selectedVideos.includes(videoUrl)}
-                      onChange={() => handleVideoSelection(videoUrl)}
-                      className="absolute top-2 left-2 h-5 w-5 z-10 cursor-pointer"
-                    />
-                    <video
-                      src={videoUrl}
-                      controls
-                      loop
-                      playsInline
-                      style={{ width: "160px", height: "160px", objectFit: "cover" }}
-                      className="rounded-lg border border-border/20"
-                    />
-                    <button
-                      onClick={() => downloadVideo(videoUrl, `video_${i + 1}.mp4`)}
-                      className="px-3 py-1 text-xs rounded-md bg-blue-500 text-white hover:bg-blue-600 transition-colors"
-                    >
-                      Download
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )} */}
 
           {response && response.error && (
             <div className="p-6 bg-card rounded-md shadow-soft text-sm text-red-500">
