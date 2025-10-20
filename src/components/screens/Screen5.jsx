@@ -20,6 +20,7 @@ export const Screen5 = ({ response, setResponse, sharedData, setActiveTab, setSh
       currentScript: sharedData?.currentScript || "",
       winningAngle: sharedData?.winningAngle || "",
       inspiration: sharedData?.inspiration || "",
+      boardInsights: "Please select an option", // Default for new dropdown
       model: "Kling", // Default model
     };
   });
@@ -76,7 +77,7 @@ export const Screen5 = ({ response, setResponse, sharedData, setActiveTab, setSh
       if (savedState) {
         const { job_id, pollStartMs, loading: wasLoading, done: wasDone } = JSON.parse(savedState);
         if (wasLoading && !wasDone && job_id) {
-          const pollTimeoutMs = 20 * 60 * 1000;
+          const pollTimeoutMs = 60 * 60 * 1000;
           const pollIntervalMs = 2000;
           const pollStart = pollStartMs || Date.now();
           setLoading(true);
@@ -147,6 +148,7 @@ export const Screen5 = ({ response, setResponse, sharedData, setActiveTab, setSh
     const callback_url = `${window.location.origin}/callback`;
     const dataToSend = {
         ...formData,
+        boardInsights: formData.boardInsights === 'Please select an option' ? '' : formData.boardInsights,
         job_id,
         callback_url,
     };
@@ -162,7 +164,7 @@ export const Screen5 = ({ response, setResponse, sharedData, setActiveTab, setSh
       }
       const pollStart = Date.now();
       try { localStorage.setItem(JOB_STATE_KEY, JSON.stringify({ job_id, pollStartMs: pollStart, loading: true, done: false })); } catch (_) {}
-      const pollTimeoutMs = 20 * 60 * 1000;
+      const pollTimeoutMs = 60 * 60 * 1000;
       const pollIntervalMs = 2000;
       let resultData = null;
 
@@ -315,7 +317,24 @@ export const Screen5 = ({ response, setResponse, sharedData, setActiveTab, setSh
   const inputFields = [
     { label: "Current Script", name: "currentScript", placeholder: "Enter Current Script", type: "textarea", require: true },
     { label: "Winning Angle", name: "winningAngle", placeholder: "Enter Winning Angle", type: "text", require: true },
-    { label: "Inspiration", name: "inspiration", placeholder: "Enter Inspiration", type: "textarea", require: true },
+    { label: "Inspiration (Optional)", name: "inspiration", placeholder: "Enter Inspiration", type: "textarea", require: false },
+    { 
+      label: "Board Insights (Inspiration)", 
+      name: "boardInsights", 
+      type: "select", 
+      options: [
+        "Please select an option",
+        "nutra_scrape",
+        "pattern_wellness",
+        "pet_scrape",
+        "pg-design",
+        "pup_grade",
+        "pw-transitions",
+        "scrape_joint_support"
+      ], 
+      defaultValue: "Please select an option", 
+      require: false 
+    },
     {label:"Choose Model", name:"model", type:"select", options:["Kling", "Sora 2","Veo 3","Veo 3.1"], defaultValue: "Kling", require: true},
   ];
 
@@ -346,6 +365,7 @@ export const Screen5 = ({ response, setResponse, sharedData, setActiveTab, setSh
             currentScript: "",
             winningAngle: "",
             inspiration: "",
+            boardInsights: "Please select an option",
             model: "Kling",
           });
           setResponse(null);
