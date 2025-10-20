@@ -77,7 +77,7 @@ export const Screen5 = ({ response, setResponse, sharedData, setActiveTab, setSh
       if (savedState) {
         const { job_id, pollStartMs, loading: wasLoading, done: wasDone } = JSON.parse(savedState);
         if (wasLoading && !wasDone && job_id) {
-          const pollTimeoutMs = 60 * 60 * 1000;
+          const pollTimeoutMs = 40 * 60 * 1000;
           const pollIntervalMs = 2000;
           const pollStart = pollStartMs || Date.now();
           setLoading(true);
@@ -164,7 +164,7 @@ export const Screen5 = ({ response, setResponse, sharedData, setActiveTab, setSh
       }
       const pollStart = Date.now();
       try { localStorage.setItem(JOB_STATE_KEY, JSON.stringify({ job_id, pollStartMs: pollStart, loading: true, done: false })); } catch (_) {}
-      const pollTimeoutMs = 60 * 60 * 1000;
+      const pollTimeoutMs = 40 * 60 * 1000;
       const pollIntervalMs = 2000;
       let resultData = null;
 
