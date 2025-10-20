@@ -495,6 +495,74 @@ export const Screen4 = ({ response, setResponse, sharedData, setActiveTab, setSh
               <div className="flex justify-between items-center mb-2">
                 <h3 className="text-sm font-medium text-foreground/80">🎬 Generated Videos</h3>
                 <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={() => handleSelectAll(response[0].videoUrlsArray.filter(url => url.startsWith('http')), 'select')}>Select All</Button>
+                  <Button variant="outline" size="sm" onClick={() => handleSelectAll(response[0].videoUrlsArray, 'deselect')}>Deselect All</Button>
+                  {selectedVideos.length > 0 && (
+                    <Button
+                      variant="default"
+                      size="sm"
+                      onClick={downloadSelectedVideos}
+                      style={{ background: "#10b981", color: "white" }}
+                    >
+                      Download Selected ({selectedVideos.length})
+                    </Button>
+                  )}
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 justify-items-center">
+                {response[0].videoUrlsArray.map((videoUrl, i) => {
+                  const isError = typeof videoUrl !== 'string' || !videoUrl.startsWith('http');
+                  return (
+                    <div key={i} className="relative flex flex-col items-center gap-2">
+                      {isError ? (
+                        <div
+                          style={{ width: "160px", height: "160px", objectFit: "cover" }}
+                          className="rounded-lg border border-border/20 bg-red-100 flex flex-col items-center justify-center text-center p-2"
+                        >
+                          <span className="text-red-500 text-xs">{videoUrl}</span>
+                        </div>
+                      ) : (
+                        <>
+                          <input
+                            type="checkbox"
+                            checked={selectedVideos.includes(videoUrl)}
+                            onChange={() => handleVideoSelection(videoUrl)}
+                            className="absolute top-2 left-2 h-5 w-5 z-10"
+                          />
+                          <video
+                            src={videoUrl}
+                            controls
+                            style={{ width: "160px", height: "160px", objectFit: "cover" }}
+                            className="rounded-lg border border-border/20"
+                          />
+                          <button
+                            onClick={() => downloadVideo(videoUrl, `video_${i + 1}.mp4`)}
+                            style={{
+                              padding: "4px 8px",
+                              fontSize: "12px",
+                              borderRadius: "6px",
+                              background: "#3b82f6",
+                              color: "white",
+                              border: "none",
+                              cursor: "pointer",
+                            }}
+                            className="px-3 py-1 text-xs rounded-md bg-blue-500 text-white hover:bg-blue-600 transition-colors"
+                          >
+                            Download
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+          {/* {response && !response.error && response[0]?.videoUrlsArray?.length > 0 && (
+            <div className="mt-4 bg-muted/40 border border-border/30 rounded-xl p-4 text-center shadow-sm">
+              <div className="flex justify-between items-center mb-2">
+                <h3 className="text-sm font-medium text-foreground/80">🎬 Generated Videos</h3>
+                <div className="flex gap-2">
                   <Button variant="outline" size="sm" onClick={() => handleSelectAll(response[0].videoUrlsArray, 'select')}>Select All</Button>
                   <Button variant="outline" size="sm" onClick={() => handleSelectAll(response[0].videoUrlsArray, 'deselect')}>Deselect All</Button>
                   {selectedVideos.length > 0 && (
@@ -543,7 +611,7 @@ export const Screen4 = ({ response, setResponse, sharedData, setActiveTab, setSh
                 ))}
               </div>
             </div>
-          )}
+          )} */}
         </div>
       </div>
 

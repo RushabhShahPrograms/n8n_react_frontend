@@ -475,6 +475,75 @@ export const Screen6 = ({ setActiveTab, sharedDataForScreen6, setSharedDataForSc
                   🎬 Generated Videos ({response[0].videoUrlsArray.length})
                 </h3>
                 <div className="flex gap-2">
+                  {/* Updated filter logic to prevent crash */}
+                  <Button variant="outline" size="sm" onClick={() => handleSelectAll(response[0].videoUrlsArray.filter(url => typeof url === 'string' && url.startsWith('http')), 'select')}>Select All</Button>
+                  <Button variant="outline" size="sm" onClick={() => handleSelectAll(response[0].videoUrlsArray, 'deselect')}>Deselect All</Button>
+                  {selectedVideos.length > 0 && (
+                    <Button
+                      variant="default"
+                      size="sm"
+                      onClick={downloadSelectedVideos}
+                      style={{ background: "#10b981", color: "white" }}
+                    >
+                      Download Selected ({selectedVideos.length})
+                    </Button>
+                  )}
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 justify-items-center">
+                {response[0].videoUrlsArray.map((videoUrl, i) => {
+                  // This check now handles both strings and numbers safely
+                  const isError = typeof videoUrl !== 'string' || !videoUrl.startsWith('http');
+
+                  return (
+                    <div key={i} className="relative flex flex-col items-center gap-2">
+                      {isError ? (
+                        <div
+                          style={{ width: "160px", height: "160px" }}
+                          className="rounded-lg border border-border/20 bg-red-100 flex flex-col items-center justify-center text-center p-2"
+                        >
+                          <span className="text-red-600 font-bold text-lg">Error</span>
+                          <span className="text-red-500 text-xs mt-1">
+                            Failed to generate video. (Details: {videoUrl})
+                          </span>
+                        </div>
+                      ) : (
+                        <>
+                          <input
+                            type="checkbox"
+                            checked={selectedVideos.includes(videoUrl)}
+                            onChange={() => handleVideoSelection(videoUrl)}
+                            className="absolute top-2 left-2 h-5 w-5 z-10 cursor-pointer"
+                          />
+                          <video
+                            src={videoUrl}
+                            controls
+                            loop
+                            playsInline
+                            style={{ width: "160px", height: "160px", objectFit: "cover" }}
+                            className="rounded-lg border border-border/20"
+                          />
+                          <button
+                            onClick={() => downloadVideo(videoUrl, `video_${i + 1}.mp4`)}
+                            className="px-3 py-1 text-xs rounded-md bg-blue-500 text-white hover:bg-blue-600 transition-colors"
+                          >
+                            Download
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+          {/* {response && !response.error && response[0]?.videoUrlsArray?.length > 0 && (
+            <div className="mt-4 bg-muted/40 border border-border/30 rounded-xl p-4 text-center shadow-sm">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-sm font-medium text-foreground/80">
+                  🎬 Generated Videos ({response[0].videoUrlsArray.length})
+                </h3>
+                <div className="flex gap-2">
                   <Button variant="outline" size="sm" onClick={() => handleSelectAll(response[0].videoUrlsArray, 'select')}>Select All</Button>
                   <Button variant="outline" size="sm" onClick={() => handleSelectAll(response[0].videoUrlsArray, 'deselect')}>Deselect All</Button>
                   {selectedVideos.length > 0 && (
@@ -516,7 +585,7 @@ export const Screen6 = ({ setActiveTab, sharedDataForScreen6, setSharedDataForSc
                 ))}
               </div>
             </div>
-          )}
+          )} */}
 
           {response && response.error && (
             <div className="p-6 bg-card rounded-md shadow-soft text-sm text-red-500">
