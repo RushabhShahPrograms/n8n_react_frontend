@@ -36,6 +36,16 @@ const Index = () => {
     setSharedDataForScreen3({});
   };
 
+  // *** FIX PART 1: Add a clearing function for Screen 4's data ***
+  const clearSharedDataForScreen4 = () => {
+    setSharedDataForScreen4({});
+  };
+
+  // *** FIX PART 1: Add a clearing function for Screen 5's data ***
+  const clearSharedDataForScreen5 = () => {
+    setSharedDataForScreen5({});
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b border-border/50 bg-card/50 backdrop-blur-sm sticky top-0 z-50 shadow-soft">
@@ -180,11 +190,11 @@ const Index = () => {
           </TabsContent>
 
           <TabsContent value="screen4" className="mt-0">
-            <Screen4 response={screen4Response} setResponse={setScreen4Response} setActiveTab={setActiveTab} sharedData={sharedDataForScreen4} setSharedDataForScreen5={setSharedDataForScreen5}/>
+            <Screen4 response={screen4Response} setResponse={setScreen4Response} setActiveTab={setActiveTab} sharedData={sharedDataForScreen4} setSharedDataForScreen5={setSharedDataForScreen5} clearSharedData={clearSharedDataForScreen4}/>
           </TabsContent>
 
           <TabsContent value="screen5" className="mt-0">
-            <Screen5 response={screen5Response} setResponse={setScreen5Response} setActiveTab={setActiveTab} sharedData={sharedDataForScreen5} setSharedDataForScreen6={setSharedDataForScreen6}/>
+            <Screen5 response={screen5Response} setResponse={setScreen5Response} setActiveTab={setActiveTab} sharedData={sharedDataForScreen5} setSharedDataForScreen6={setSharedDataForScreen6} clearSharedData={clearSharedDataForScreen5}/>
           </TabsContent>
 
           <TabsContent value="screen6" className="mt-0">

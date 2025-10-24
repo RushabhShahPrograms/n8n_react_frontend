@@ -9,7 +9,7 @@ import { saveAs } from 'file-saver';
 const Screen5URL = "https://wholesomegoods.app.n8n.cloud/webhook/c929805e-af8c-406b-8bd7-52fb517d01bf";
 // const Screen5URL = "https://wholesomegoods.app.n8n.cloud/webhook-test/c929805e-af8c-406b-8bd7-52fb517d01bf";
 
-export const Screen5 = ({ response, setResponse, sharedData, setActiveTab, setSharedDataForScreen6 }) => {
+export const Screen5 = ({ response, setResponse, sharedData, setActiveTab, setSharedDataForScreen6, clearSharedData }) => {
   const [activeTab] = useState("Text to video");
   const [formData, setFormData] = useState(() => {
     try {
@@ -32,16 +32,32 @@ export const Screen5 = ({ response, setResponse, sharedData, setActiveTab, setSh
   const JOB_STATE_KEY = "screen5JobState";
   const RESPONSE_KEY = "screen5Response";
 
+  // *** FIX PART 2: Replace the problematic useEffect with this corrected version ***
   useEffect(() => {
-    if (sharedData) {
-      setFormData((prev) => ({
-        ...prev,
-        currentScript: prev.currentScript || sharedData.currentScript || "",
-        winningAngle: prev.winningAngle || sharedData.winningAngle || "",
-        inspiration: prev.inspiration || sharedData.inspiration || "",
-      }));
+    // Only proceed if there's sharedData to process
+    if (sharedData && Object.keys(sharedData).length > 0) {
+      setFormData((prev) => {
+        // Check if the form is empty before populating it from sharedData
+        const isFormEmpty = !prev.currentScript && !prev.winningAngle && !prev.inspiration;
+        if (isFormEmpty) {
+          return {
+            ...prev,
+            currentScript: sharedData.currentScript || "",
+            winningAngle: sharedData.winningAngle || "",
+            inspiration: sharedData.inspiration || "",
+          };
+        }
+        // If the form is not empty, do not change it
+        return prev;
+      });
+
+      // After using the data, call the function to clear it from the parent
+      if (clearSharedData) {
+        clearSharedData();
+      }
     }
-  }, [sharedData]);
+  // Add `clearSharedData` to the dependency array
+  }, [sharedData, clearSharedData]);
 
   const handleInputChange = (name, value) => {
     setFormData((prev) => ({ ...prev, [name]: value }));

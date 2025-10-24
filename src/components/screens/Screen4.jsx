@@ -59,7 +59,7 @@ const pollForResult = async (job_id) => {
 };
 
 
-export const Screen4 = ({ response, setResponse, sharedData, setActiveTab, setSharedDataForScreen5 }) => {
+export const Screen4 = ({ response, setResponse, sharedData, setActiveTab, setSharedDataForScreen5, clearSharedData }) => {
   const [activeTab] = useState("Images to videos");
   const [formData, setFormData] = useState(() => {
     try {
@@ -359,19 +359,30 @@ export const Screen4 = ({ response, setResponse, sharedData, setActiveTab, setSh
   // END: REGENERATION MODAL HANDLERS
 
   // This hook populates the form from sharedData
+  // *** FIX PART 2: Modify this hook to consume and clear the shared data ***
   useEffect(() => {
-    const updates = {};
-    if (sharedData?.currentScript && !formData.scripts) {
-      updates.scripts = sharedData.currentScript;
-    }
-    if (sharedData?.selectedImageUrls && !formData.imgUrls) {
-      updates.imgUrls = sharedData.selectedImageUrls.join('\n');
-    }
+    // Only proceed if there's sharedData to process
+    if (sharedData && Object.keys(sharedData).length > 0) {
+      const updates = {};
+      // Check if the form field is empty before populating from sharedData
+      if (sharedData.currentScript && !formData.scripts) {
+        updates.scripts = sharedData.currentScript;
+      }
+      if (sharedData.selectedImageUrls && sharedData.selectedImageUrls.length > 0 && !formData.imgUrls) {
+        updates.imgUrls = sharedData.selectedImageUrls.join('\n');
+      }
 
-    if (Object.keys(updates).length > 0) {
-      setFormData((prev) => ({ ...prev, ...updates }));
+      if (Object.keys(updates).length > 0) {
+        setFormData((prev) => ({ ...prev, ...updates }));
+      }
+
+      // After using the data, call the function to clear it from the parent (index.jsx)
+      if (clearSharedData) {
+        clearSharedData();
+      }
     }
-  }, [sharedData, formData.scripts, formData.imgUrls]);
+  // Add `clearSharedData` to the dependency array
+  }, [sharedData, clearSharedData, formData.scripts, formData.imgUrls]);
 
   // Persist response when it changes
   useEffect(() => {
@@ -478,12 +489,20 @@ export const Screen4 = ({ response, setResponse, sharedData, setActiveTab, setSh
         onMouseOver={(e) => { e.currentTarget.style.filter = "brightness(1.1)"; }}
         onMouseOut={(e) => { e.currentTarget.style.filter = "brightness(1)"; }}
         onClick={() => {
-          try { localStorage.clear(); } catch (_) {}
+          // *** FIX PART 3: Correctly clear only this screen's data ***
+          try {
+            localStorage.removeItem("screen4FormData");
+            localStorage.removeItem(JOB_STATE_KEY);
+            localStorage.removeItem(RESPONSE_KEY);
+            localStorage.removeItem(REGENERATING_VIDEOS_KEY);
+          } catch (_) {}
           setFormData({ scripts: "", imgUrls: "", model: "Veo3.1" });
           setResponse(null);
           setDone(false);
           setSelectedVideos([]);
           setUploadedImages([]);
+          // Also clear the file input visually
+          if (fileInputRef.current) fileInputRef.current.value = null;
         }}
       >
         Clear Inputs
