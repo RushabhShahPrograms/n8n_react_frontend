@@ -10,7 +10,7 @@ import { saveAs } from 'file-saver';
 const Screen3URL = "https://wholesomegoods.app.n8n.cloud/webhook/b6e95acd-b2c8-46fa-9a92-90ae55bc8a5f";
 // const Screen3URL = "https://wholesomegoods.app.n8n.cloud/webhook-test/b6e95acd-b2c8-46fa-9a92-90ae55bc8a5f"
 
-export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSharedDataForScreen4 }) => {
+export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSharedDataForScreen4, clearSharedData }) => {
   const [activeTab] = useState("Images/Voice");
   const [formData, setFormData] = useState(() => {
     try {
@@ -77,14 +77,26 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
 
   useEffect(() => {
     if (sharedData && Object.keys(sharedData).length > 0) {
-      setFormData((prev) => ({
-        ...prev,
-        scripts: sharedData.currentScriptIndex || prev.scripts,
-        insightsMatch: sharedData.insightsMatch || prev.insightsMatch,
-        imgUrl: sharedData.imgUrl || prev.imgUrl,
-      }));
+      setFormData((prev) => {
+        const isFormEmpty = !prev.scripts && !prev.insightsMatch && !prev.imgUrl;
+        if (isFormEmpty) {
+          return {
+            ...prev,
+            scripts: sharedData.currentScriptIndex || "",
+            insightsMatch: sharedData.insightsMatch || "",
+            imgUrl: sharedData.imgUrl || "",
+          };
+        }
+        return prev;
+      });
+
+      // 2. After using the data, call the function to clear it from the parent (index.jsx)
+      if (clearSharedData) {
+        clearSharedData();
+      }
     }
-  }, [sharedData]);
+  // 3. Add `clearSharedData` to the dependency array
+  }, [sharedData, clearSharedData]);
 
   useEffect(() => {
     try { localStorage.setItem("screen3FormData", JSON.stringify(formData)); } catch (_) {}
@@ -388,6 +400,7 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
     setDone(false);
     setShowResult(false);
     setIsWaitingToDisplay(false);
+    setSelectedImages([]);
     const job_id = generateJobId();
     const callback_url = `${window.location.origin}/callback`;
     const dataToSend = {
