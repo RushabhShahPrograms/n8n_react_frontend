@@ -9,7 +9,7 @@ import { generateJobId } from "@/lib/utils";
 const Screen2URL = "https://wholesomegoods.app.n8n.cloud/webhook/49b35a96-aad0-4a57-ade2-f170d0d2370c";
 // const Screen2URL = "https://wholesomegoods.app.n8n.cloud/webhook-test/49b35a96-aad0-4a57-ade2-f170d0d2370c"
 
-export const Screen2 = ({ response, setResponse, sharedData, setActiveTab, setSharedDataForScreen3, setSharedDataForScreen5 }) => {
+export const Screen2 = ({ response, setResponse, sharedData, setActiveTab, setSharedDataForScreen3, setSharedDataForScreen5, clearSharedData }) => {
   const [activeTab] = useState("AIDA Script");
   const [formData, setFormData] = useState(() => {
     // Restore from localStorage, fall back to sharedData
@@ -222,18 +222,31 @@ export const Screen2 = ({ response, setResponse, sharedData, setActiveTab, setSh
   };
 
   // Parse response into scripts and insights
+  // *** FIX PART 2: Replace the problematic logic in this useEffect ***
   useEffect(() => {
     // When sharedData comes from MainScreen, populate form fields
     if (sharedData && Object.keys(sharedData).length > 0) {
-      setFormData((prev) => ({
-        ...prev,
-        productUrl: prev.productUrl || sharedData.productUrl || "",
-        winningAngle: prev.winningAngle || sharedData.winningAngle || "",
-      }));
+      setFormData((prev) => {
+        // Check if the form is empty before populating it
+        const isFormEmpty = !prev.productUrl && !prev.winningAngle;
+        if (isFormEmpty) {
+          return {
+            ...prev,
+            productUrl: sharedData.productUrl || "",
+            winningAngle: sharedData.winningAngle || "",
+          };
+        }
+        // If the form is not empty, do not change it
+        return prev;
+      });
+
+      // After using the data, call the function to clear it from the parent
+      if (clearSharedData) {
+        clearSharedData();
+      }
     }
 
-    // If there's a valid response, the process is "done". This ensures
-    // the "Go to Screen 3" button persists correctly across tab changes.
+    // --- The rest of this hook's logic is fine ---
     if (response && !response.error) {
       setDone(true);
     } else {
@@ -246,12 +259,10 @@ export const Screen2 = ({ response, setResponse, sharedData, setActiveTab, setSh
       return;
     }
 
-    // Extract all <div class="script"> blocks
     const scripts = [...response.matchAll(/<div class="script">(.*?)<\/div>/gs)].map(
       (m) => m[1]
     );
 
-    // Extract "Based on Insights" section
     const insightsMatch = response.match(/<h3>Based on Insights:<\/h3>([\s\S]*)/);
     let insights = null;
     if (insightsMatch) {
@@ -262,7 +273,8 @@ export const Screen2 = ({ response, setResponse, sharedData, setActiveTab, setSh
 
     setScriptList([...scripts, insights].filter(Boolean));
     setCurrentScriptIndex(0);
-  }, [response, sharedData]);
+  // *** FIX PART 3: Add `clearSharedData` to the dependency array ***
+  }, [response, sharedData, clearSharedData]);
 
   return (
     <ScreenLayout>

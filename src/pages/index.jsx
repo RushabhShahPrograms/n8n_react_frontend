@@ -31,6 +31,11 @@ const Index = () => {
   const [sharedDataForScreen5, setSharedDataForScreen5] = useState({});
   const [sharedDataForScreen6, setSharedDataForScreen6] = useState({});
 
+  // *** FIX PART 1: Add a clearing function for the main sharedData state ***
+  const clearSharedData = () => {
+    setSharedData({});
+  };
+
   // *** FIX PART 1: Add this function to clear the shared state ***
   const clearSharedDataForScreen3 = () => {
     setSharedDataForScreen3({});
@@ -182,7 +187,7 @@ const Index = () => {
           </TabsContent>
 
           <TabsContent value="screen2" className="mt-0">
-            <Screen2 response={screen2Response} setResponse={setScreen2Response} setActiveTab={setActiveTab} sharedData={sharedData} setSharedDataForScreen3={setSharedDataForScreen3} setSharedDataForScreen5={setSharedDataForScreen5} />
+            <Screen2 response={screen2Response} setResponse={setScreen2Response} setActiveTab={setActiveTab} sharedData={sharedData} setSharedDataForScreen3={setSharedDataForScreen3} setSharedDataForScreen5={setSharedDataForScreen5} clearSharedData={clearSharedData}/>
           </TabsContent>
 
           <TabsContent value="screen3" className="mt-0">
