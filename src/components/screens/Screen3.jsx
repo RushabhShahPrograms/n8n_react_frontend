@@ -2,13 +2,54 @@ import React, { useState, useEffect } from "react";
 import { ScreenLayout } from "@/components/ScreenLayout";
 import { InputSection } from "@/components/InputSection";
 import { Button } from "@/components/ui/button";
-import { marked } from "marked";
 import { generateJobId } from "@/lib/utils";
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 
-const Screen3URL = "https://wholesomegoods.app.n8n.cloud/webhook/b6e95acd-b2c8-46fa-9a92-90ae55bc8a5f";
-// const Screen3URL = "https://wholesomegoods.app.n8n.cloud/webhook-test/b6e95acd-b2c8-46fa-9a92-90ae55bc8a5f"
+const Screen3URL = "https://wholesomegoods.app.n8n.cloud/webhook/4528c8ee-e405-4e5d-92f3-3c01be2a9f9a";
+const REGENERATION_URL = "https://wholesomegoods.app.n8n.cloud/webhook/e0c78210-35ad-4564-9042-31eb8fa51959";
+const REGENERATING_IMAGES_KEY = "screen3RegeneratingImages";
+
+
+// START: NEW POLLING FUNCTION FOR REGENERATION
+// This function is specifically designed to parse the simple HTML from the regeneration workflow
+const pollForRegenResult = async (job_id) => {
+  const pollTimeoutMs = 20 * 60 * 1000; // 20 minutes
+  const pollIntervalMs = 2000;
+  const pollStart = Date.now();
+
+  while (Date.now() - pollStart < pollTimeoutMs) {
+    try {
+      const pollUrl = `${window.location.origin}/result/${job_id}`;
+      const r = await fetch(pollUrl);
+      if (r.status === 200) {
+        const json = await r.json();
+        const resultData = json?.result ?? null; // This will be the raw HTML string
+
+        if (resultData && typeof resultData === 'string') {
+          const parser = new DOMParser();
+          const doc = parser.parseFromString(resultData, "text/html");
+
+          // Extract the data from the simple HTML structure
+          const outputUrl = doc.querySelector('a')?.href;
+          const prompt = doc.querySelector('div > div')?.textContent.trim();
+
+          if (outputUrl && prompt) {
+            // Successfully parsed the required data
+            console.log("Successfully polled and parsed regen result:", { outputUrl, prompt });
+            return { outputUrl, prompt };
+          }
+        }
+      }
+    } catch (pollError) {
+      console.warn("Polling error during regeneration:", pollError);
+    }
+    await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+  }
+  throw new Error("Timed out waiting for regeneration result.");
+};
+// END: NEW POLLING FUNCTION FOR REGENERATION
+
 
 export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSharedDataForScreen4, clearSharedData }) => {
   const [activeTab] = useState("Images/Voice");
@@ -29,8 +70,6 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
     };
   });
   const [loading, setLoading] = useState(false);
-  const [scriptList, setScriptList] = useState([]);
-  const [currentScriptIndex, setCurrentScriptIndex] = useState(0);
   const [done, setDone] = useState(false);
   const [isWaitingToDisplay, setIsWaitingToDisplay] = useState(false);
   const [showResult, setShowResult] = useState(false);
@@ -38,6 +77,21 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
   const [loadingDownloads, setLoadingDownloads] = useState([]);
   const JOB_STATE_KEY = "screen3JobState";
   const RESPONSE_KEY = "screen3Response";
+
+  // START: NEW STATE FOR PARSED IMAGE DATA
+  const [productImages, setProductImages] = useState([]);
+  const [lifestyleImages, setLifestyleImages] = useState([]);
+  const [voiceUrl, setVoiceUrl] = useState(null);
+  // END: NEW STATE FOR PARSED IMAGE DATA
+
+  // START: MODAL AND REGENERATION STATE
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedImageForRegen, setSelectedImageForRegen] = useState(null);
+  const [editablePrompt, setEditablePrompt] = useState("");
+  const [isRegenerating, setIsRegenerating] = useState(false);
+  const [regeneratingImages, setRegeneratingImages] = useState([]); // Tracks regenerating items by imageUrl
+  const [regenModel, setRegenModel] = useState("Image-Gen");
+  // END: MODAL AND REGENERATION STATE
 
   const voiceStyle = [
     "Rachel-American-calm-young-female",
@@ -89,13 +143,8 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
         }
         return prev;
       });
-
-      // 2. After using the data, call the function to clear it from the parent (index.jsx)
-      if (clearSharedData) {
-        clearSharedData();
-      }
+      if (clearSharedData) clearSharedData();
     }
-  // 3. Add `clearSharedData` to the dependency array
   }, [sharedData, clearSharedData]);
 
   useEffect(() => {
@@ -115,9 +164,9 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
       const urlObj = new URL(url);
       const pathname = urlObj.pathname;
       const filename = pathname.split('/').pop();
-      return filename || 'downloaded_audio.mp3';
+      return filename || 'downloaded_file';
     } catch {
-      return 'downloaded_audio.mp3';
+      return 'downloaded_file';
     }
   };
 
@@ -137,9 +186,7 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
           const contentType = res.headers.get('content-type');
           if (!contentType?.startsWith('audio/')) throw new Error();
           return await res.blob();
-        } catch {
-          throw new Error('Proxy failed');
-        }
+        } catch { throw new Error('Proxy failed'); }
       });
       return await Promise.any(proxyPromises);
     }
@@ -153,7 +200,6 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
       const a = document.createElement('a');
       a.href = blobUrl;
       a.download = filename;
-      a.style.display = 'none';
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -164,7 +210,6 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
       a.href = url;
       a.download = filename;
       a.target = '_blank';
-      a.style.display = 'none';
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -189,9 +234,7 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
           const contentType = res.headers.get('content-type');
           if (!contentType?.startsWith('image/')) throw new Error();
           return await res.blob();
-        } catch {
-          throw new Error('Proxy failed');
-        }
+        } catch { throw new Error('Proxy failed'); }
       });
       return await Promise.any(proxyPromises);
     }
@@ -205,7 +248,6 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
       const a = document.createElement('a');
       a.href = blobUrl;
       a.download = filename;
-      a.style.display = 'none';
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -216,7 +258,6 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
       a.href = url;
       a.download = filename;
       a.target = '_blank';
-      a.style.display = 'none';
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -245,9 +286,7 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
             const ext = filename.includes('.') ? `.${filename.split('.').pop()}` : '.png';
             const name = `image_${i + 1}${ext}`;
             zip.file(name, blob);
-          } catch (err) {
-            console.error(`Failed to add ${url}:`, err);
-          }
+          } catch (err) { console.error(`Failed to add ${url}:`, err); }
         });
         await Promise.all(downloadPromises);
         const zipBlob = await zip.generateAsync({ type: 'blob' });
@@ -365,20 +404,33 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
       } else if (savedResponse) {
         setShowResult(true);
       }
+       // Restore regenerating images state
+      const savedRegenerating = localStorage.getItem(REGENERATING_IMAGES_KEY);
+      if (savedRegenerating) {
+        setRegeneratingImages(JSON.parse(savedRegenerating));
+      }
     } catch (_) {}
   }, []);
 
   const getHtmlFromResponse = (resp) => {
     if (!resp) return "";
-    if (typeof resp === "string") return resp;
+    // The main workflow returns a stringified JSON array, so we handle that first.
+    if (typeof resp === "string") {
+        try {
+            const parsed = JSON.parse(resp);
+            if (Array.isArray(parsed) && parsed[0]?.formattedOutput) {
+                return parsed[0].formattedOutput;
+            }
+        } catch (e) {
+            // If parsing fails, it might be a direct HTML string (like from regeneration)
+            return resp;
+        }
+    }
+    // Handle object-based responses
     if (resp && typeof resp === "object") {
-      if (typeof resp.formattedOutput === "string") return resp.formattedOutput;
-      if (typeof resp.html === "string") return resp.html;
-      try {
-        return JSON.stringify(resp);
-      } catch (_) {
-        return String(resp);
-      }
+        if (Array.isArray(resp) && resp[0]?.formattedOutput) return resp[0].formattedOutput;
+        if (typeof resp.formattedOutput === "string") return resp.formattedOutput;
+        if (typeof resp.html === "string") return resp.html;
     }
     return String(resp);
   };
@@ -417,9 +469,7 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(dataToSend),
       });
-      if (!res.ok) {
-        throw new Error(`n8n returned ${res.status}`);
-      }
+      if (!res.ok) throw new Error(`n8n returned ${res.status}`);
 
       const pollStart = Date.now();
       try { localStorage.setItem(JOB_STATE_KEY, JSON.stringify({ job_id, pollStartMs: pollStart, loading: true, done: false })); } catch (_) {}
@@ -472,36 +522,129 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
     }
   };
 
+  // This effect parses the raw HTML response into structured data
   useEffect(() => {
     if (response && !response.error) {
       setDone(true);
+      const html = getHtmlFromResponse(response);
+      if (!html || typeof html !== "string") return;
+
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(html, "text/html");
+
+      // Parse Product Images
+      const productSection = Array.from(doc.querySelectorAll('h3')).find(h3 => h3.textContent.includes('Product Image'));
+      const productList = productSection ? productSection.nextElementSibling.querySelector('ul') : null;
+      if (productList) {
+        const items = Array.from(productList.querySelectorAll('li')).map(li => {
+          const links = Array.from(li.querySelectorAll('a'));
+          const outputUrl = links.length > 0 ? links[0].href : null;
+          const referenceImage = links.length > 1 ? links[1].href : null;
+          const prompt = li.querySelector('div')?.textContent.trim();
+          return { outputUrl, prompt, referenceImage, type: 'product' };
+        });
+        setProductImages(items.filter(item => item.outputUrl));
+      }
+
+      // Parse Lifestyle Images
+      const lifestyleSection = Array.from(doc.querySelectorAll('h3')).find(h3 => h3.textContent.includes('LifeStyle Image'));
+      const lifestyleList = lifestyleSection ? lifestyleSection.nextElementSibling.querySelector('ul') : null;
+      if (lifestyleList) {
+        const items = Array.from(lifestyleList.querySelectorAll('li')).map(li => {
+          const outputUrl = li.querySelector('a')?.href;
+          const prompt = li.querySelector('div')?.textContent.trim();
+          return { outputUrl, prompt, type: 'lifestyle' };
+        });
+        setLifestyleImages(items.filter(item => item.outputUrl));
+      }
+
+      // Parse Voice URL
+      const voiceSection = Array.from(doc.querySelectorAll('h3')).find(h3 => h3.textContent.includes('Voice URL'));
+      const voiceLink = voiceSection ? voiceSection.nextElementSibling.querySelector('a') : null;
+      if (voiceLink) {
+        setVoiceUrl(voiceLink.href);
+      }
+
     } else {
       setDone(false);
       setShowResult(false);
     }
-
-    if (!response || response.error) {
-      setScriptList([]);
-      setCurrentScriptIndex(0);
-      return;
-    }
-    const html = getHtmlFromResponse(response);
-    if (!html || typeof html !== "string") {
-      setScriptList([]);
-      setCurrentScriptIndex(0);
-      return;
-    }
-    const scripts = [...html.matchAll(/<div class="script">(.*?)<\/div>/gs)].map((m) => m[1]);
-    const insightsMatch = html.match(/<h3>Based on Insights:<\/h3>([\s\S]*)/);
-    let insights = null;
-    if (insightsMatch) {
-      const markdownText = insightsMatch[1];
-      insights = `<h3>Based on Insights:</h3>` + marked(markdownText);
-    }
-
-    setScriptList([...scripts, insights].filter(Boolean));
-    setCurrentScriptIndex(0);
   }, [response]);
+
+  // START: REGENERATION MODAL HANDLERS
+  const handleOpenRegenerateModal = (imageData) => {
+    setSelectedImageForRegen(imageData);
+    setEditablePrompt(imageData.prompt);
+    setRegenModel("Image-Gen"); // Reset to default
+    setIsModalOpen(true);
+  };
+
+  const handleRegenerateSubmit = async () => {
+    if (!selectedImageForRegen) return;
+
+    const originalImageUrl = selectedImageForRegen.outputUrl;
+    setIsRegenerating(true);
+    setRegeneratingImages(prev => [...prev, originalImageUrl]);
+    setIsModalOpen(false);
+
+    const dataToSend = {
+      prompt: editablePrompt,
+      model: regenModel,
+      job_id: generateJobId(),
+      callback_url: `${window.location.origin}/callback`,
+      tag: selectedImageForRegen.type,
+      ...(selectedImageForRegen.referenceImage && { referenceImage: selectedImageForRegen.referenceImage }),
+    };
+
+    try {
+      console.log("📤 Sending regeneration request:", dataToSend);
+      const res = await fetch(REGENERATION_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(dataToSend),
+      });
+
+      if (!res.ok) throw new Error(`Regeneration webhook returned ${res.status}`);
+
+      const newImageData = await pollForRegenResult(dataToSend.job_id);
+
+      // Update the correct image list
+      const updateList = (prevList) =>
+        prevList.map(image =>
+          image.outputUrl === originalImageUrl
+            ? { ...image, outputUrl: newImageData.outputUrl, prompt: newImageData.prompt }
+            : image
+        );
+
+      if (selectedImageForRegen.type === 'product') {
+        setProductImages(updateList);
+      } else {
+        setLifestyleImages(updateList);
+      }
+
+    } catch (err) {
+      console.error("Regeneration failed:", err);
+      alert(`Regeneration failed: ${err.message}`);
+    } finally {
+      setIsRegenerating(false);
+      setRegeneratingImages(prev => prev.filter(url => url !== originalImageUrl));
+    }
+  };
+  // END: REGENERATION MODAL HANDLERS
+
+  // Persist regenerating images state to localStorage
+  useEffect(() => {
+    try {
+      if (regeneratingImages.length > 0) {
+        localStorage.setItem(REGENERATING_IMAGES_KEY, JSON.stringify(regeneratingImages));
+      } else {
+        localStorage.removeItem(REGENERATING_IMAGES_KEY);
+      }
+    } catch (e) {
+      console.error("Failed to save regenerating images state:", e);
+    }
+  }, [regeneratingImages]);
+
 
   return (
     <ScreenLayout>
@@ -523,9 +666,12 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
         onMouseOver={(e) => { e.currentTarget.style.filter = "brightness(1.1)"; }}
         onMouseOut={(e) => { e.currentTarget.style.filter = "brightness(1)"; }}
         onClick={() => {
-          try { localStorage.removeItem("screen3FormData"); } catch (_) {}
-          try { localStorage.removeItem(JOB_STATE_KEY); } catch (_) {}
-          try { localStorage.removeItem(RESPONSE_KEY); } catch (_) {}
+          try {
+            localStorage.removeItem("screen3FormData");
+            localStorage.removeItem(JOB_STATE_KEY);
+            localStorage.removeItem(RESPONSE_KEY);
+            localStorage.removeItem(REGENERATING_IMAGES_KEY);
+          } catch (_) {}
           setFormData({
             scripts: "",
             insightsMatch: "",
@@ -541,6 +687,9 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
           setShowResult(false);
           setIsWaitingToDisplay(false);
           setSelectedImages([]);
+          setProductImages([]);
+          setLifestyleImages([]);
+          setVoiceUrl(null);
         }}
       >
         Clear Inputs
@@ -583,12 +732,7 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
                 <div style={{ width: 8, height: 8, borderRadius: 8, background: "#60a5fa", animation: "bounce 0.6s 0.15s infinite alternate" }} />
                 <div style={{ width: 8, height: 8, borderRadius: 8, background: "#93c5fd", animation: "bounce 0.6s 0.3s infinite alternate" }} />
               </div>
-              <style>{`
-                @keyframes bounce {
-                  from { transform: translateY(0); opacity: 1; }
-                  to { transform: translateY(-6px); opacity: 0.7; }
-                }
-              `}</style>
+              <style>{`@keyframes bounce { from { transform: translateY(0); } to { transform: translateY(-6px); } }`}</style>
             </div>
           ) : isWaitingToDisplay ? (
             <div className="mt-6 p-6 bg-card rounded-md shadow-soft text-sm text-muted-foreground text-center">
@@ -599,178 +743,94 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
             </div>
           ) : showResult && response && !response.error ? (
             <>
-              {(() => {
-                const html = getHtmlFromResponse(response);
-                const productImages = (() => {
-                  const sectionMatch = html.match(/<h3>Generated Product Image URLs:<\/h3>([\s\S]*?)(<h3>|$)/i);
-                  if (!sectionMatch) return [];
-                  return Array.from(sectionMatch[1].matchAll(/<li>(https?:\/\/[^\s<]+)<\/li>/gi), m => m[1]);
-                })();
-
-                if (!productImages.length) return null;
-
-                return (
-                  <div className="mt-4 bg-muted/40 border border-border/30 rounded-xl p-4 text-center shadow-sm">
-                    <div className="flex justify-between items-center mb-2">
-                      <h3 className="text-sm font-medium text-foreground/80">🖼️ Product Images</h3>
-                      <div className="flex gap-2">
-                        <Button variant="outline" size="sm" onClick={() => handleSelectAll(productImages, 'select')}>Select All</Button>
-                        <Button variant="outline" size="sm" onClick={() => handleSelectAll(productImages, 'deselect')}>Deselect All</Button>
-                        {selectedImages.length > 0 && (
-                          <Button
-                            variant="default"
-                            size="sm"
-                            onClick={downloadSelectedImages}
-                            style={{ background: "#10b981", color: "white" }}
-                            disabled={loadingDownloads.includes('zip')}
-                          >
-                            {loadingDownloads.includes('zip') ? 'Zipping...' : `Download Selected (${selectedImages.length})`}
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex flex-wrap justify-center gap-3">
-                      {productImages.map((imgUrl, index) => (
-                        <div key={index} className="relative flex flex-col items-center gap-2">
-                          <input
-                            type="checkbox"
-                            checked={selectedImages.includes(imgUrl)}
-                            onChange={() => handleImageSelection(imgUrl)}
-                            className="absolute top-2 left-2 h-5 w-5 z-10"
-                          />
-                          <img
-                            src={imgUrl}
-                            alt={`Product ${index + 1}`}
-                            style={{ width: "120px", height: "120px", objectFit: "cover" }}
-                            className="rounded-lg border border-border/30 shadow-md hover:scale-105 transition-transform duration-300 cursor-pointer"
-                          />
-                          <button
-                            onClick={() => downloadImage(imgUrl, `product_image_${index + 1}.png`)}
-                            style={{
-                              padding: "4px 8px",
-                              fontSize: "12px",
-                              borderRadius: "6px",
-                              background: "#3b82f6",
-                              color: "white",
-                              border: "none",
-                              cursor: "pointer",
-                            }}
-                            className="px-3 py-1 text-xs rounded-md bg-blue-500 text-white hover:bg-blue-600 transition-colors"
-                            disabled={loadingDownloads.includes(imgUrl)}
-                          >
-                            {loadingDownloads.includes(imgUrl) ? 'Downloading...' : 'Download'}
-                          </button>
-                        </div>
-                      ))}
+              {productImages.length > 0 && (
+                <div className="mt-4 bg-muted/40 border border-border/30 rounded-xl p-4 shadow-sm">
+                  <div className="flex flex-wrap justify-between items-center gap-2 mb-4">
+                    <h3 className="text-sm font-medium text-foreground/80">🖼️ Product Images</h3>
+                    <div className="flex flex-wrap gap-2">
+                      <Button variant="outline" size="sm" onClick={() => handleSelectAll(productImages.map(img => img.outputUrl), 'select')}>Select All</Button>
+                      <Button variant="outline" size="sm" onClick={() => handleSelectAll(productImages.map(img => img.outputUrl), 'deselect')}>Deselect All</Button>
+                      {selectedImages.length > 0 && (
+                        <Button variant="default" size="sm" onClick={downloadSelectedImages} style={{ background: "#10b981", color: "white" }} disabled={loadingDownloads.includes('zip')}>
+                          {loadingDownloads.includes('zip') ? 'Zipping...' : `Download Selected (${selectedImages.length})`}
+                        </Button>
+                      )}
                     </div>
                   </div>
-                );
-              })()}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                    {productImages.map((imgData, index) => (
+                      <div key={imgData.outputUrl || index} className="relative flex flex-col items-center gap-2 bg-card/50 p-2 rounded-lg border border-border/20">
+                        {regeneratingImages.includes(imgData.outputUrl) && (
+                           <div className="absolute inset-0 bg-black/70 rounded-lg flex flex-col items-center justify-center z-20">
+                             <div className="text-white font-bold text-sm text-center">Regenerating...</div>
+                           </div>
+                        )}
+                        <input type="checkbox" checked={selectedImages.includes(imgData.outputUrl)} onChange={() => handleImageSelection(imgData.outputUrl)} className="absolute top-2 left-2 h-5 w-5 z-10"/>
+                        <img src={imgData.outputUrl} alt={`Product ${index + 1}`} className="w-full aspect-square object-cover rounded-lg border border-border/30 shadow-md"/>
+                        <div className="flex flex-wrap justify-center gap-2 mt-1">
+                          <button onClick={() => downloadImage(imgData.outputUrl, `product_image_${index + 1}.png`)} className="px-2 py-1 text-xs rounded-md bg-blue-500 text-white hover:bg-blue-600" disabled={loadingDownloads.includes(imgData.outputUrl)}>
+                            {loadingDownloads.includes(imgData.outputUrl) ? '...' : 'Download'}
+                          </button>
+                          <button onClick={() => handleOpenRegenerateModal(imgData)} className="px-2 py-1 text-xs rounded-md bg-gray-500 text-white hover:bg-gray-600" disabled={regeneratingImages.includes(imgData.outputUrl)}>
+                            Regenerate
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
-              {(() => {
-                const html = getHtmlFromResponse(response);
-                const lifestyleImages = (() => {
-                  const sectionMatch = html.match(/<h3>Generated LifeStyle Image URLs:<\/h3>([\s\S]*?)(<h3>|$)/i);
-                  if (!sectionMatch) return [];
-                  return Array.from(sectionMatch[1].matchAll(/<li>(https?:\/\/[^\s<]+)<\/li>/gi), m => m[1]);
-                })();
-
-                if (!lifestyleImages.length) return null;
-
-                return (
-                  <div className="mt-4 bg-muted/40 border border-border/30 rounded-xl p-4 text-center shadow-sm">
-                    <div className="flex justify-between items-center mb-2">
+              {lifestyleImages.length > 0 && (
+                 <div className="mt-4 bg-muted/40 border border-border/30 rounded-xl p-4 shadow-sm">
+                    <div className="flex flex-wrap justify-between items-center gap-2 mb-4">
                       <h3 className="text-sm font-medium text-foreground/80">🌟 Lifestyle Images</h3>
-                      <div className="flex gap-2">
-                        <Button variant="outline" size="sm" onClick={() => handleSelectAll(lifestyleImages, 'select')}>Select All</Button>
-                        <Button variant="outline" size="sm" onClick={() => handleSelectAll(lifestyleImages, 'deselect')}>Deselect All</Button>
+                       <div className="flex flex-wrap gap-2">
+                        <Button variant="outline" size="sm" onClick={() => handleSelectAll(lifestyleImages.map(img => img.outputUrl), 'select')}>Select All</Button>
+                        <Button variant="outline" size="sm" onClick={() => handleSelectAll(lifestyleImages.map(img => img.outputUrl), 'deselect')}>Deselect All</Button>
                         {selectedImages.length > 0 && (
-                          <Button
-                            variant="default"
-                            size="sm"
-                            onClick={downloadSelectedImages}
-                            style={{ background: "#10b981", color: "white" }}
-                            disabled={loadingDownloads.includes('zip')}
-                          >
+                          <Button variant="default" size="sm" onClick={downloadSelectedImages} style={{ background: "#10b981", color: "white" }} disabled={loadingDownloads.includes('zip')}>
                             {loadingDownloads.includes('zip') ? 'Zipping...' : `Download Selected (${selectedImages.length})`}
                           </Button>
                         )}
                       </div>
                     </div>
-                    <div className="flex flex-wrap justify-center gap-3">
-                      {lifestyleImages.map((imgUrl, index) => (
-                        <div key={index} className="relative flex flex-col items-center gap-2">
-                          <input
-                            type="checkbox"
-                            checked={selectedImages.includes(imgUrl)}
-                            onChange={() => handleImageSelection(imgUrl)}
-                            className="absolute top-2 left-2 h-5 w-5 z-10"
-                          />
-                          <img
-                            src={imgUrl}
-                            alt={`Lifestyle ${index + 1}`}
-                            style={{ width: "120px", height: "120px", objectFit: "cover" }}
-                            className="rounded-lg border border-border/30 shadow-md hover:scale-105 transition-transform duration-300 cursor-pointer"
-                          />
-                          <button
-                            onClick={() => downloadImage(imgUrl, `lifestyle_image_${index + 1}.png`)}
-                            style={{
-                              padding: "4px 8px",
-                              fontSize: "12px",
-                              borderRadius: "6px",
-                              background: "#3b82f6",
-                              color: "white",
-                              border: "none",
-                              cursor: "pointer",
-                            }}
-                            className="px-3 py-1 text-xs rounded-md bg-blue-500 text-white hover:bg-blue-600 transition-colors"
-                            disabled={loadingDownloads.includes(imgUrl)}
-                          >
-                            {loadingDownloads.includes(imgUrl) ? 'Downloading...' : 'Download'}
-                          </button>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                      {lifestyleImages.map((imgData, index) => (
+                        <div key={imgData.outputUrl || index} className="relative flex flex-col items-center gap-2 bg-card/50 p-2 rounded-lg border border-border/20">
+                           {regeneratingImages.includes(imgData.outputUrl) && (
+                              <div className="absolute inset-0 bg-black/70 rounded-lg flex flex-col items-center justify-center z-20">
+                                <div className="text-white font-bold text-sm text-center">Regenerating...</div>
+                              </div>
+                           )}
+                          <input type="checkbox" checked={selectedImages.includes(imgData.outputUrl)} onChange={() => handleImageSelection(imgData.outputUrl)} className="absolute top-2 left-2 h-5 w-5 z-10"/>
+                          <img src={imgData.outputUrl} alt={`Lifestyle ${index + 1}`} className="w-full aspect-square object-cover rounded-lg border border-border/30 shadow-md"/>
+                          <div className="flex flex-wrap justify-center gap-2 mt-1">
+                            <button onClick={() => downloadImage(imgData.outputUrl, `lifestyle_image_${index + 1}.png`)} className="px-2 py-1 text-xs rounded-md bg-blue-500 text-white hover:bg-blue-600" disabled={loadingDownloads.includes(imgData.outputUrl)}>
+                              {loadingDownloads.includes(imgData.outputUrl) ? '...' : 'Download'}
+                            </button>
+                            <button onClick={() => handleOpenRegenerateModal(imgData)} className="px-2 py-1 text-xs rounded-md bg-gray-500 text-white hover:bg-gray-600" disabled={regeneratingImages.includes(imgData.outputUrl)}>
+                              Regenerate
+                            </button>
+                          </div>
                         </div>
                       ))}
                     </div>
                   </div>
-                );
-              })()}
+              )}
 
-              {(() => {
-                const html = getHtmlFromResponse(response);
-                const voiceUrl = (() => {
-                  const sectionMatch = html.match(/<h3>Generated Voice URL:<\/h3>([\s\S]*?)(<h3>|$)/i);
-                  if (!sectionMatch) return null;
-                  const urlMatch = sectionMatch[1].match(/https?:\/\/[^\s<]+/i);
-                  return urlMatch ? urlMatch[0] : null;
-                })();
-
-                if (!voiceUrl) return null;
-
-                return (
-                  <div className="mt-4 bg-muted/40 border border-border/30 rounded-xl p-4 text-center shadow-sm">
-                    <h3 className="text-sm font-medium mb-2 text-foreground/80">🎤 VoiceOver</h3>
-                    <audio controls className="w-full mt-2">
-                      <source src={voiceUrl} type="audio/mpeg" />
-                      Your browser does not support the audio element.
-                    </audio>
-                    <button
-                      onClick={() => downloadAudio(voiceUrl, getFilenameFromUrl(voiceUrl))}
-                      style={{
-                        padding: "4px 8px",
-                        fontSize: "12px",
-                        borderRadius: "6px",
-                        background: "#3b82f6",
-                        color: "white",
-                        border: "none",
-                        cursor: "pointer",
-                      }}
-                      disabled={loadingDownloads.includes(voiceUrl)}
-                    >
-                      {loadingDownloads.includes(voiceUrl) ? 'Downloading...' : 'Download Voice'}
-                    </button>
-                  </div>
-                );
-              })()}
+              {voiceUrl && (
+                <div className="mt-4 bg-muted/40 border border-border/30 rounded-xl p-4 text-center shadow-sm">
+                  <h3 className="text-sm font-medium mb-2 text-foreground/80">🎤 VoiceOver</h3>
+                  <audio controls className="w-full mt-2">
+                    <source src={voiceUrl} type="audio/mpeg" />
+                    Your browser does not support the audio element.
+                  </audio>
+                  <button onClick={() => downloadAudio(voiceUrl, getFilenameFromUrl(voiceUrl))} className="mt-2 px-3 py-1 text-xs rounded-md bg-blue-500 text-white hover:bg-blue-600" disabled={loadingDownloads.includes(voiceUrl)}>
+                    {loadingDownloads.includes(voiceUrl) ? 'Downloading...' : 'Download Voice'}
+                  </button>
+                </div>
+              )}
             </>
           ) : response && response.error ? (
             <div className="mt-6 p-6 bg-card rounded-md shadow-soft text-sm text-red-500">
@@ -782,31 +842,8 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
 
       <div className="flex justify-center mt-10">
         {!done ? (
-          <Button
-            onClick={handleSubmit}
-            disabled={loading}
-            style={{
-              flex: 1,
-              textAlign: "center",
-              padding: "12px 16px",
-              borderRadius: "9999px",
-              fontWeight: 500,
-              cursor: loading ? "not-allowed" : "pointer",
-              transition: "all 0.3s",
-              background: "linear-gradient(to right, #3b82f6, #6366f1)",
-              color: "white",
-              border: "none",
-              outline: "none",
-            }}
-          >
-            {loading ? (
-              <span className="flex items-center justify-center space-x-2">
-                <span className="h-4 w-4 border-t-transparent rounded-full animate-spin border-white"></span>
-                <span>Generating...</span>
-              </span>
-            ) : (
-              "✨ Generate Content"
-            )}
+          <Button onClick={handleSubmit} disabled={loading} style={{ flex: 1, textAlign: "center", padding: "12px 16px", borderRadius: "9999px", fontWeight: 500, cursor: loading ? "not-allowed" : "pointer", transition: "all 0.3s", background: "linear-gradient(to right, #3b82f6, #6366f1)", color: "white", border: "none", outline: "none" }}>
+            {loading ? "Generating..." : "✨ Generate Content"}
           </Button>
         ) : (
           <Button
@@ -818,24 +855,56 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
               setActiveTab("screen4");
             }}
             variant="default"
-            style={{
-              flex: 1,
-              textAlign: "center",
-              padding: "12px 16px",
-              borderRadius: "9999px",
-              fontWeight: 500,
-              cursor: "pointer",
-              transition: "all 0.3s",
-              background: "linear-gradient(to right, #6366f1, #10b981)",
-              color: "white",
-              border: "none",
-              outline: "none",
-            }}
+            style={{ flex: 1, textAlign: "center", padding: "12px 16px", borderRadius: "9999px", fontWeight: 500, cursor: "pointer", transition: "all 0.3s", background: "linear-gradient(to right, #6366f1, #10b981)", color: "white", border: "none", outline: "none" }}
           >
             Go to Images to videos
           </Button>
         )}
       </div>
+
+      {/* Regeneration Modal */}
+      {isModalOpen && selectedImageForRegen && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(10, 10, 20, 0.8)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }} onClick={() => setIsModalOpen(false)}>
+          <div style={{ background: '#1a202c', color: '#e2e8f0', width: '60vw', maxWidth: '800px', maxHeight: '90vh', display: 'flex', flexDirection: 'column', borderRadius: '12px', boxShadow: '0 10px 30px rgba(0, 0, 0, 0.5)', border: '1px solid #2d3748', overflow: 'hidden' }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ padding: '1.5rem', borderBottom: '1px solid #2d3748', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ margin: 0, fontSize: '1.2rem' }}>Regenerate Image</h3>
+              <button onClick={() => setIsModalOpen(false)} style={{ background: 'transparent', border: 'none', color: 'white', fontSize: '1.5rem', cursor: 'pointer' }}>&times;</button>
+            </div>
+            <div style={{ display: 'flex', padding: '1.5rem', gap: '1.5rem', overflowY: 'auto' }}>
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                <div>
+                  <h4 style={{ marginBottom: '0.5rem', fontWeight: '600', color: '#a0aec0' }}>Source Image</h4>
+                  <img src={selectedImageForRegen.outputUrl} alt="Source for regeneration" style={{ width: '100%', objectFit: 'contain', borderRadius: '8px', border: '1px solid #2d3748' }}/>
+                </div>
+                {selectedImageForRegen.referenceImage && (
+                  <div>
+                    <h4 style={{ marginBottom: '0.5rem', fontWeight: '600', color: '#a0aec0' }}>Reference Image</h4>
+                    <img src={selectedImageForRegen.referenceImage} alt="Reference" style={{ width: '100%', objectFit: 'contain', borderRadius: '8px', border: '1px solid #2d3748' }}/>
+                  </div>
+                )}
+              </div>
+              <div style={{ flex: 2, display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', flexGrow: 1 }}>
+                  <h4 style={{ marginBottom: '0.5rem', fontWeight: '600', color: '#a0aec0' }}>Animation Prompt</h4>
+                  <textarea value={editablePrompt} onChange={(e) => setEditablePrompt(e.target.value)} style={{ flexGrow: 1, width: '100%', background: '#2d3748', color: '#e2e8f0', border: '1px solid #4a5568', borderRadius: '8px', padding: '0.75rem', fontSize: '0.9rem', resize: 'vertical', minHeight: '200px' }}/>
+                </div>
+                <div>
+                  <label htmlFor="regenModelSelect" style={{ fontSize: '0.8rem', color: '#a0aec0', marginBottom: '0.5rem', display: 'block' }}>Choose Model</label>
+                  <select id="regenModelSelect" value={regenModel} onChange={(e) => setRegenModel(e.target.value)} style={{ width: '100%', background: '#2d3748', color: '#e2e8f0', border: '1px solid #4a5568', borderRadius: '8px', padding: '0.75rem', fontSize: '0.9rem' }}>
+                    <option value="Image-Gen">Image-Gen</option>
+                    <option value="Nano-Banana">Nano-Banana</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+            <div style={{ padding: '1.5rem', borderTop: '1px solid #2d3748', display: 'flex', justifyContent: 'flex-end' }}>
+              <Button onClick={handleRegenerateSubmit} disabled={isRegenerating} style={{ background: 'linear-gradient(to right, #3b82f6, #6366f1)', color: 'white', fontWeight: '600', borderRadius: '8px', border: 'none', cursor: isRegenerating ? 'not-allowed' : 'pointer' }}>
+                {isRegenerating ? 'Sending...' : 'Send for Regeneration'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </ScreenLayout>
   );
 };
