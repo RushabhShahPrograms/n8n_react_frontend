@@ -6,8 +6,8 @@ import { generateJobId } from "@/lib/utils";
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 
-const Screen5URL = "https://wholesomegoods.app.n8n.cloud/webhook-test/2118f781-4da7-450f-8ecf-61b15e111c24";
-const REGENERATION_URL = "https://wholesomegoods.app.n8n.cloud/webhook-test/2118f781-4da7-450f-8ecf-61b15e334c24";
+const Screen5URL = "https://wholesomegoods.app.n8n.cloud/webhook/2118f781-4da7-450f-8ecf-61b15e111c24";
+const REGENERATION_URL = "https://wholesomegoods.app.n8n.cloud/webhook/2118f781-4da7-450f-8ecf-61b15e334c24";
 const REGENERATING_VIDEOS_KEY = "screen5RegeneratingVideos";
 
 // Reusable and robust polling function (adapted from Screen4)
