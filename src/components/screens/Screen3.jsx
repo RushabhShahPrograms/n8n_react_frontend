@@ -608,19 +608,23 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
 
       const newImageData = await pollForRegenResult(dataToSend.job_id);
 
-      // Update the correct image list
-      const updateList = (prevList) =>
-        prevList.map(image =>
-          image.outputUrl === originalImageUrl
-            ? { ...image, outputUrl: newImageData.outputUrl, prompt: newImageData.prompt }
-            : image
-        );
+      // *** START: FIX ***
+      // Instead of updating the local image state, we update the main response object.
+      // This ensures the change is persisted to localStorage.
+      setResponse(prevResponse => {
+        const currentHtml = getHtmlFromResponse(prevResponse);
+        if (!currentHtml) return prevResponse; // Safety check
 
-      if (selectedImageForRegen.type === 'product') {
-        setProductImages(updateList);
-      } else {
-        setLifestyleImages(updateList);
-      }
+        // Replace the old image URL and prompt with the new ones in the raw HTML string.
+        // This is more robust than trying to manipulate the parsed data structure.
+        const updatedHtmlWithUrl = currentHtml.replace(originalImageUrl, newImageData.outputUrl);
+        const finalUpdatedHtml = updatedHtmlWithUrl.replace(selectedImageForRegen.prompt, newImageData.prompt);
+        
+        // The useEffect hook listening on [response] will automatically re-parse this
+        // new HTML and update the productImages/lifestyleImages state correctly.
+        return finalUpdatedHtml;
+      });
+      // *** END: FIX ***
 
     } catch (err) {
       console.error("Regeneration failed:", err);
