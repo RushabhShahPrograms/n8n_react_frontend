@@ -8,8 +8,9 @@ import { saveAs } from 'file-saver';
 
 const Screen3URL = "https://wholesomegoods.app.n8n.cloud/webhook/4528c8ee-e405-4e5d-92f3-3c01be2a9f9a";
 const REGENERATION_URL = "https://wholesomegoods.app.n8n.cloud/webhook/e0c78210-35ad-4564-9042-31eb8fa51959";
+const HISTORY_URL = "https://wholesomegoods.app.n8n.cloud/webhook/788188bc-daf4-47d7-874c-fdbe81c38071";
 const REGENERATING_IMAGES_KEY = "screen3RegeneratingImages";
-
+const HISTORY_KEY = "screen3History";
 
 // START: NEW POLLING FUNCTION FOR REGENERATION
 // This function is specifically designed to parse the simple HTML from the regeneration workflow
@@ -50,6 +51,7 @@ const pollForRegenResult = async (job_id) => {
 };
 // END: NEW POLLING FUNCTION FOR REGENERATION
 
+// POLLING FUNCTION FOR HISTORY HAS BEEN REMOVED
 
 export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSharedDataForScreen4, clearSharedData }) => {
   const [activeTab] = useState("Images/Voice");
@@ -83,6 +85,11 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
   const [lifestyleImages, setLifestyleImages] = useState([]);
   const [voiceUrl, setVoiceUrl] = useState(null);
   // END: NEW STATE FOR PARSED IMAGE DATA
+
+  // NEW: HISTORY STATE
+  const [history, setHistory] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  // END: HISTORY STATE
 
   // START: MODAL AND REGENERATION STATE
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -158,6 +165,26 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
       }
     } catch (_) {}
   }, [response]);
+
+  // LOAD HISTORY FROM LOCALSTORAGE ON MOUNT
+  useEffect(() => {
+    try {
+      const savedHistory = localStorage.getItem(HISTORY_KEY);
+      if (savedHistory) {
+        setHistory(JSON.parse(savedHistory));
+      }
+    } catch (_) {}
+  }, []);
+
+  // SAVE HISTORY TO LOCALSTORAGE WHENEVER IT CHANGES
+  useEffect(() => {
+    try {
+      // Only save if history is not empty to avoid overwriting a valid stored history with a temporary empty state
+      if (history.length > 0) {
+        localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+      }
+    } catch (_) {}
+  }, [history]);
 
   const getFilenameFromUrl = (url) => {
     try {
@@ -522,7 +549,41 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
     }
   };
 
-  // This effect parses the raw HTML response into structured data
+  const handleRefreshHistory = async () => {
+    setHistoryLoading(true);
+    setHistory([]);
+
+    try {
+      console.log("Fetching history directly...");
+      const res = await fetch(HISTORY_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+
+      if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(`History webhook returned ${res.status}: ${errorText}`);
+      }
+
+      const parsedHistory = await res.json();
+      
+      if (Array.isArray(parsedHistory)) {
+        const formattedHistory = parsedHistory.map(item => item.json).filter(Boolean);
+        setHistory(formattedHistory);
+      } else {
+        setHistory([]);
+      }
+
+    } catch (err) {
+      console.error("Error fetching history:", err);
+      setHistory([]);
+      alert(`Failed to fetch history: ${err.message}`);
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (response && !response.error) {
       setDone(true);
@@ -532,7 +593,6 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
       const parser = new DOMParser();
       const doc = parser.parseFromString(html, "text/html");
 
-      // Parse Product Images
       const productSection = Array.from(doc.querySelectorAll('h3')).find(h3 => h3.textContent.includes('Product Image'));
       const productList = productSection ? productSection.nextElementSibling.querySelector('ul') : null;
       if (productList) {
@@ -546,7 +606,6 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
         setProductImages(items.filter(item => item.outputUrl));
       }
 
-      // Parse Lifestyle Images
       const lifestyleSection = Array.from(doc.querySelectorAll('h3')).find(h3 => h3.textContent.includes('LifeStyle Image'));
       const lifestyleList = lifestyleSection ? lifestyleSection.nextElementSibling.querySelector('ul') : null;
       if (lifestyleList) {
@@ -558,7 +617,6 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
         setLifestyleImages(items.filter(item => item.outputUrl));
       }
 
-      // Parse Voice URL
       const voiceSection = Array.from(doc.querySelectorAll('h3')).find(h3 => h3.textContent.includes('Voice URL'));
       const voiceLink = voiceSection ? voiceSection.nextElementSibling.querySelector('a') : null;
       if (voiceLink) {
@@ -571,11 +629,10 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
     }
   }, [response]);
 
-  // START: REGENERATION MODAL HANDLERS
   const handleOpenRegenerateModal = (imageData) => {
     setSelectedImageForRegen(imageData);
     setEditablePrompt(imageData.prompt);
-    setRegenModel("Image-Gen"); // Reset to default
+    setRegenModel("Image-Gen");
     setIsModalOpen(true);
   };
 
@@ -608,23 +665,15 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
 
       const newImageData = await pollForRegenResult(dataToSend.job_id);
 
-      // *** START: FIX ***
-      // Instead of updating the local image state, we update the main response object.
-      // This ensures the change is persisted to localStorage.
       setResponse(prevResponse => {
         const currentHtml = getHtmlFromResponse(prevResponse);
-        if (!currentHtml) return prevResponse; // Safety check
+        if (!currentHtml) return prevResponse;
 
-        // Replace the old image URL and prompt with the new ones in the raw HTML string.
-        // This is more robust than trying to manipulate the parsed data structure.
         const updatedHtmlWithUrl = currentHtml.replace(originalImageUrl, newImageData.outputUrl);
         const finalUpdatedHtml = updatedHtmlWithUrl.replace(selectedImageForRegen.prompt, newImageData.prompt);
         
-        // The useEffect hook listening on [response] will automatically re-parse this
-        // new HTML and update the productImages/lifestyleImages state correctly.
         return finalUpdatedHtml;
       });
-      // *** END: FIX ***
 
     } catch (err) {
       console.error("Regeneration failed:", err);
@@ -634,9 +683,7 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
       setRegeneratingImages(prev => prev.filter(url => url !== originalImageUrl));
     }
   };
-  // END: REGENERATION MODAL HANDLERS
 
-  // Persist regenerating images state to localStorage
   useEffect(() => {
     try {
       if (regeneratingImages.length > 0) {
@@ -648,7 +695,6 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
       console.error("Failed to save regenerating images state:", e);
     }
   }, [regeneratingImages]);
-
 
   return (
     <ScreenLayout>
@@ -675,6 +721,7 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
             localStorage.removeItem(JOB_STATE_KEY);
             localStorage.removeItem(RESPONSE_KEY);
             localStorage.removeItem(REGENERATING_IMAGES_KEY);
+            localStorage.removeItem(HISTORY_KEY);
           } catch (_) {}
           setFormData({
             scripts: "",
@@ -694,6 +741,7 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
           setProductImages([]);
           setLifestyleImages([]);
           setVoiceUrl(null);
+          setHistory([]);
         }}
       >
         Clear Inputs
@@ -842,8 +890,8 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
             </div>
           ) : null}
         </div>
-      </div><br/>
-
+      </div>
+      
       <div className="flex justify-center mt-10">
         {!done ? (
           <Button onClick={handleSubmit} disabled={loading} style={{ flex: 1, textAlign: "center", padding: "12px 16px", borderRadius: "9999px", fontWeight: 500, cursor: loading ? "not-allowed" : "pointer", transition: "all 0.3s", background: "linear-gradient(to right, #3b82f6, #6366f1)", color: "white", border: "none", outline: "none" }}>
@@ -865,6 +913,84 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
           </Button>
         )}
       </div>
+
+      {/* HISTORY SECTION */}
+      <div className="mt-12">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl font-bold text-white">📋 Generation History</h2>
+          <Button 
+            onClick={handleRefreshHistory} 
+            disabled={historyLoading}
+            variant="outline"
+            style={{ background: "#3b82f6", color: "white" }}
+          >
+            {historyLoading ? "Loading..." : "🔄 Refresh History"}
+          </Button>
+        </div>
+        {history.length > 0 ? (
+          <div className="overflow-x-auto bg-white rounded-lg shadow-lg p-1">
+            <table className="w-full text-sm text-left table-fixed border-collapse border-4 border-black" style={{ borderWidth: '3px', borderColor: '#000' }}>
+              <thead className="text-xs uppercase bg-gray-200">
+                <tr>
+                  <th className="px-4 py-3 border-4 border-black w-1/3 bg-gray-100 font-bold text-black" style={{ borderWidth: '3px' }}>Scripts</th>
+                  <th className="px-4 py-3 border-4 border-black w-1/3 bg-gray-100 font-bold text-black" style={{ borderWidth: '3px' }}>Lifestyle Images</th>
+                  <th className="px-4 py-3 border-4 border-black w-1/3 bg-gray-100 font-bold text-black" style={{ borderWidth: '3px' }}>Product Images</th>
+                </tr>
+              </thead>
+              <tbody>
+                {history.map((row, idx) => (
+                  <tr key={idx} className="border-4 border-black hover:bg-gray-50" style={{ borderWidth: '3px' }}>
+                    <td
+                      className="px-4 py-3 align-top text-xs border-4 border-black w-1/3 break-words text-black"
+                      style={{ borderWidth: '3px' }}
+                      dangerouslySetInnerHTML={{ __html: row.Scripts }}
+                    />
+
+                    <td className="px-4 py-3 align-top border-4 border-black w-1/3" style={{ borderWidth: '3px' }}>
+                      <div className="grid grid-cols-2 gap-2">
+                        {row["Lifestyle Images"]?.split(',').map((url, i) => (
+                          <a key={i} href={url.trim()} target="_blank" rel="noopener noreferrer">
+                            <div className="aspect-square w-full max-w-[100px] mx-auto">
+                              <img
+                                src={url.trim()}
+                                alt={`Lifestyle ${i + 1}`}
+                                className="w-full h-full object-cover rounded-md border border-black border-2 hover:opacity-80 transition-opacity"
+                                title={url.trim()}
+                              />
+                            </div>
+                          </a>
+                        ))}
+                      </div>
+                    </td>
+
+                    <td className="px-4 py-3 align-top border border-black border-2 w-1/3">
+                      <div className="grid grid-cols-2 gap-2">
+                        {row["Product Images"]?.split(',').map((url, i) => (
+                          <a key={i} href={url.trim()} target="_blank" rel="noopener noreferrer">
+                            <div className="aspect-square w-full max-w-[100px] mx-auto">
+                              <img
+                                src={url.trim()}
+                                alt={`Product ${i + 1}`}
+                                className="w-full h-full object-cover rounded-md border border-black border-2 hover:opacity-80 transition-opacity"
+                                title={url.trim()}
+                              />
+                            </div>
+                          </a>
+                        ))}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : historyLoading ? (
+          <div className="text-center p-4 text-muted-foreground">Loading history...</div>
+        ) : (
+          <div className="text-center p-4 text-muted-foreground">No history available. Click Refresh to load.</div>
+        )}
+      </div>
+      {/* END: HISTORY SECTION */}
 
       {/* Regeneration Modal */}
       {isModalOpen && selectedImageForRegen && (
