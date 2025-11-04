@@ -929,24 +929,30 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
         </div>
         {history.length > 0 ? (
           <div className="overflow-x-auto bg-white rounded-lg shadow-lg p-1">
-            <table className="w-full text-sm text-left table-fixed border-collapse border-4 border-black" style={{ borderWidth: '3px', borderColor: '#000' }}>
+            <table className="w-full text-sm text-left table-auto border-collapse border-4 border-black" style={{ borderWidth: '3px', borderColor: '#000' }}>
               <thead className="text-xs uppercase bg-gray-200">
                 <tr>
-                  <th className="px-4 py-3 border-4 border-black w-1/3 bg-gray-100 font-bold text-black" style={{ borderWidth: '3px' }}>Scripts</th>
-                  <th className="px-4 py-3 border-4 border-black w-1/3 bg-gray-100 font-bold text-black" style={{ borderWidth: '3px' }}>Lifestyle Images</th>
-                  <th className="px-4 py-3 border-4 border-black w-1/3 bg-gray-100 font-bold text-black" style={{ borderWidth: '3px' }}>Product Images</th>
+                  <th className="px-4 py-3 border-4 border-black w-[20%] bg-gray-100 font-bold text-black" style={{ borderWidth: '3px' }}>Scripts</th>
+                  <th className="px-4 py-3 border-4 border-black w-[25%] bg-gray-100 font-bold text-black" style={{ borderWidth: '3px' }}>Lifestyle Prompts</th>
+                  <th className="px-4 py-3 border-4 border-black w-[15%] bg-gray-100 font-bold text-black" style={{ borderWidth: '3px' }}>Lifestyle Images</th>
+                  <th className="px-4 py-3 border-4 border-black w-[25%] bg-gray-100 font-bold text-black" style={{ borderWidth: '3px' }}>Product Prompts</th>
+                  <th className="px-4 py-3 border-4 border-black w-[15%] bg-gray-100 font-bold text-black" style={{ borderWidth: '3px' }}>Product Images</th>
                 </tr>
               </thead>
               <tbody>
                 {history.map((row, idx) => (
                   <tr key={idx} className="border-4 border-black hover:bg-gray-50" style={{ borderWidth: '3px' }}>
                     <td
-                      className="px-4 py-3 align-top text-xs border-4 border-black w-1/3 break-words text-black"
+                      className="px-4 py-3 align-top text-xs border-4 border-black break-words text-black"
                       style={{ borderWidth: '3px' }}
                       dangerouslySetInnerHTML={{ __html: row.Scripts }}
                     />
-
-                    <td className="px-4 py-3 align-top border-4 border-black w-1/3" style={{ borderWidth: '3px' }}>
+                    <td className="px-4 py-3 align-top text-xs border-4 border-black break-words text-black" style={{ borderWidth: '3px' }}>
+                      {row["Lifestyle Prompts"]?.split('||').map((prompt, i) => (
+                        <p key={i} className="mb-2">{prompt.trim()}</p>
+                      ))}
+                    </td>
+                    <td className="px-4 py-3 align-top border-4 border-black" style={{ borderWidth: '3px' }}>
                       <div className="grid grid-cols-2 gap-2">
                         {row["Lifestyle Images"]?.split(',').map((url, i) => (
                           <a key={i} href={url.trim()} target="_blank" rel="noopener noreferrer">
@@ -962,8 +968,12 @@ export const Screen3 = ({ response, setResponse, sharedData, setActiveTab, setSh
                         ))}
                       </div>
                     </td>
-
-                    <td className="px-4 py-3 align-top border border-black border-2 w-1/3">
+                    <td className="px-4 py-3 align-top text-xs border-4 border-black break-words text-black" style={{ borderWidth: '3px' }}>
+                      {row["Product Prompts"]?.split('||').map((prompt, i) => (
+                        <p key={i} className="mb-2">{prompt.trim()}</p>
+                      ))}
+                    </td>
+                    <td className="px-4 py-3 align-top border border-black border-2">
                       <div className="grid grid-cols-2 gap-2">
                         {row["Product Images"]?.split(',').map((url, i) => (
                           <a key={i} href={url.trim()} target="_blank" rel="noopener noreferrer">
