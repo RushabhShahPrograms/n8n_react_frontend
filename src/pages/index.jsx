@@ -6,6 +6,7 @@ import { Screen3 } from "@/components/screens/Screen3";
 import { Screen4 } from "@/components/screens/Screen4";
 import { Screen5 } from "@/components/screens/Screen5";
 import { Screen6 } from "@/components/screens/Screen6";
+import { Screen7 } from "@/components/screens/Screen7"; // Import Screen7
 import { Sparkles } from "lucide-react";
 
 const Index = () => {
@@ -23,6 +24,7 @@ const Index = () => {
   const [screen4Response, setScreen4Response] = useState(null);
   const [screen5Response, setScreen5Response] = useState(null);
   const [screen6Response, setScreen6Response] = useState(null);
+  const [screen7Response, setScreen7Response] = useState(null); // State for Screen7
 
   // Shared data from MainScreen → Screen2
   const [sharedData, setSharedData] = useState({});
@@ -181,6 +183,7 @@ const Index = () => {
             >
               Image to Multiple videos
             </TabsTrigger>
+                          <TabsTrigger value="screen7" style={{ flex: 1, textAlign: "center", padding: "12px 16px", borderRadius: "9999px", fontWeight: 500, cursor: "pointer", transition: "all 0.3s", background: "linear-gradient(to right, #3b82f6, #6366f1)", color: "white", border: "none", outline: "none" }} className="data-[state=inactive]:bg-white data-[state=inactive]:text-gray-600 hover:brightness-105">Hook to Image</TabsTrigger>
           </TabsList>
           <TabsContent value="main" className="mt-0">
             <MainScreen response={mainResponse} setResponse={setMainResponse} loading={mainLoading} setLoading={setMainLoading} done={mainDone} setDone={setMainDone} setActiveTab={setActiveTab} setSharedData={setSharedData}/>
@@ -204,6 +207,9 @@ const Index = () => {
 
           <TabsContent value="screen6" className="mt-0">
             <Screen6 response={screen6Response} setActiveTab={setActiveTab} sharedDataForScreen6={sharedDataForScreen6} setSharedDataForScreen6={setSharedDataForScreen6}/>
+          </TabsContent>
+          <TabsContent value="screen7" className="mt-0">
+            <Screen7 response={screen7Response} setResponse={setScreen7Response} />
           </TabsContent>
         </Tabs>
       </main>
