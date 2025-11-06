@@ -108,6 +108,7 @@ const Index = () => {
                 }}
                 className="data-[state=inactive]:bg-white data-[state=inactive]:text-gray-600 hover:brightness-105"
               >AIDA Script</TabsTrigger>
+              <TabsTrigger value="screen7" style={{ flex: 1, textAlign: "center", padding: "12px 16px", borderRadius: "9999px", fontWeight: 500, cursor: "pointer", transition: "all 0.3s", background: "linear-gradient(to right, #3b82f6, #6366f1)", color: "white", border: "none", outline: "none" }} className="data-[state=inactive]:bg-white data-[state=inactive]:text-gray-600 hover:brightness-105">Hook to Image</TabsTrigger>
               <TabsTrigger
                 value="screen3"
                 style={{
@@ -183,7 +184,6 @@ const Index = () => {
             >
               Image to Multiple videos
             </TabsTrigger>
-                          <TabsTrigger value="screen7" style={{ flex: 1, textAlign: "center", padding: "12px 16px", borderRadius: "9999px", fontWeight: 500, cursor: "pointer", transition: "all 0.3s", background: "linear-gradient(to right, #3b82f6, #6366f1)", color: "white", border: "none", outline: "none" }} className="data-[state=inactive]:bg-white data-[state=inactive]:text-gray-600 hover:brightness-105">Hook to Image</TabsTrigger>
           </TabsList>
           <TabsContent value="main" className="mt-0">
             <MainScreen response={mainResponse} setResponse={setMainResponse} loading={mainLoading} setLoading={setMainLoading} done={mainDone} setDone={setMainDone} setActiveTab={setActiveTab} setSharedData={setSharedData}/>
@@ -191,6 +191,10 @@ const Index = () => {
 
           <TabsContent value="screen2" className="mt-0">
             <Screen2 response={screen2Response} setResponse={setScreen2Response} setActiveTab={setActiveTab} sharedData={sharedData} setSharedDataForScreen3={setSharedDataForScreen3} setSharedDataForScreen5={setSharedDataForScreen5} clearSharedData={clearSharedData}/>
+          </TabsContent>
+
+          <TabsContent value="screen7" className="mt-0">
+            <Screen7 response={screen7Response} setResponse={setScreen7Response} />
           </TabsContent>
 
           <TabsContent value="screen3" className="mt-0">
@@ -207,9 +211,6 @@ const Index = () => {
 
           <TabsContent value="screen6" className="mt-0">
             <Screen6 response={screen6Response} setActiveTab={setActiveTab} sharedDataForScreen6={sharedDataForScreen6} setSharedDataForScreen6={setSharedDataForScreen6}/>
-          </TabsContent>
-          <TabsContent value="screen7" className="mt-0">
-            <Screen7 response={screen7Response} setResponse={setScreen7Response} />
           </TabsContent>
         </Tabs>
       </main>
