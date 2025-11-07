@@ -70,6 +70,14 @@ export const Screen7 = ({ response, setResponse }) => {
   const [totalImageCount, setTotalImageCount] = useState(0);
   const [parsedResponse, setParsedResponse] = useState([]);
   
+  // START: NEW STATE FOR REGENERATION MODAL
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedImageForRegen, setSelectedImageForRegen] = useState(null); // Will store { imageUrl, prompt, hookTitle }
+  const [editablePrompt, setEditablePrompt] = useState("");
+  const [regenModel, setRegenModel] = useState("Image-Gen"); // Default model
+  const [isRegenerating, setIsRegenerating] = useState(false);
+  // END: NEW STATE FOR REGENERATION MODAL
+
   const JOB_STATE_KEY = "screen7JobState";
   const RESPONSE_KEY = "screen7Response";
   const fileInputRef = useRef(null);
@@ -334,6 +342,36 @@ export const Screen7 = ({ response, setResponse }) => {
     setSelectedImages(prev => type === 'select' ? [...new Set([...prev, ...urls])] : prev.filter(url => !urls.includes(url)));
   };
 
+  // START: NEW FUNCTIONS FOR REGENERATION MODAL
+  const handleOpenRegenerateModal = (imgData, hookTitle) => {
+    setSelectedImageForRegen({ ...imgData, hookTitle });
+    setEditablePrompt(imgData.prompt);
+    setRegenModel("Image-Gen"); // Reset to default when opening
+    setIsModalOpen(true);
+  };
+
+  const handleRegenerateSubmit = async () => {
+    if (!selectedImageForRegen) return;
+
+    setIsRegenerating(true);
+
+    // This is where the API call would go in the future.
+    // For now, we'll just log the data and simulate a delay.
+    console.log("Regeneration Data:", {
+      originalData: selectedImageForRegen,
+      newPrompt: editablePrompt,
+      model: regenModel,
+    });
+
+    // Simulate API call
+    await new Promise(resolve => setTimeout(resolve, 1500));
+
+    setIsRegenerating(false);
+    setIsModalOpen(false);
+    setSelectedImageForRegen(null);
+  };
+  // END: NEW FUNCTIONS FOR REGENERATION MODAL
+
   const otherInputFields = [
     {
       label: "Board Insights (Inspiration)",
@@ -458,7 +496,7 @@ export const Screen7 = ({ response, setResponse }) => {
                         <img src={imgData.imageUrl} alt={`Generated for ${hookData.hookTitle} - ${i+1}`} className="w-full h-48 object-cover rounded-lg border border-border/20" />
                         <div className="absolute bottom-0 left-0 right-0 bg-black/50 p-2 flex justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                           <Button className="text-black" size="sm" onClick={() => downloadImage(imgData.imageUrl)} disabled={loadingDownloads.includes(imgData.imageUrl)}>{loadingDownloads.includes(imgData.imageUrl) ? '...' : 'Download'}</Button>
-                          <Button size="sm" variant="secondary">Regenerate</Button>
+                          <Button size="sm" variant="secondary" onClick={() => handleOpenRegenerateModal(imgData, hookData.hookTitle)}>Regenerate</Button>
                         </div>
                       </div>
                     ))}
@@ -481,6 +519,48 @@ export const Screen7 = ({ response, setResponse }) => {
             </Button>
         )}
       </div>
+
+      {/* Regeneration Modal */}
+      {isModalOpen && selectedImageForRegen && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(10, 10, 20, 0.8)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }} onClick={() => setIsModalOpen(false)}>
+          <div style={{ background: '#1a202c', color: '#e2e8f0', width: '60vw', maxWidth: '800px', maxHeight: '90vh', display: 'flex', flexDirection: 'column', borderRadius: '12px', boxShadow: '0 10px 30px rgba(0, 0, 0, 0.5)', border: '1px solid #2d3748', overflow: 'hidden' }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ padding: '1.5rem', borderBottom: '1px solid #2d3748', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ margin: 0, fontSize: '1.2rem' }}>Regenerate Image</h3>
+              <button onClick={() => setIsModalOpen(false)} style={{ background: 'transparent', border: 'none', color: 'white', fontSize: '1.5rem', cursor: 'pointer' }}>&times;</button>
+            </div>
+            <div style={{ display: 'flex', padding: '1.5rem', gap: '1.5rem', overflowY: 'auto' }}>
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                <div>
+                  <h4 style={{ marginBottom: '0.5rem', fontWeight: '600', color: '#a0aec0' }}>Original Hook</h4>
+                  <p style={{ background: '#2d3748', padding: '0.75rem', borderRadius: '8px', fontSize: '0.9rem' }}>{selectedImageForRegen.hookTitle}</p>
+                </div>
+                <div>
+                  <h4 style={{ marginBottom: '0.5rem', fontWeight: '600', color: '#a0aec0' }}>Generated Image</h4>
+                  <img src={selectedImageForRegen.imageUrl} alt="Source for regeneration" style={{ width: '100%', objectFit: 'contain', borderRadius: '8px', border: '1px solid #2d3748' }}/>
+                </div>
+              </div>
+              <div style={{ flex: 2, display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', flexGrow: 1 }}>
+                  <h4 style={{ marginBottom: '0.5rem', fontWeight: '600', color: '#a0aec0' }}>Animation Prompt</h4>
+                  <textarea value={editablePrompt} onChange={(e) => setEditablePrompt(e.target.value)} style={{ flexGrow: 1, width: '100%', background: '#2d3748', color: '#e2e8f0', border: '1px solid #4a5568', borderRadius: '8px', padding: '0.75rem', fontSize: '0.9rem', resize: 'vertical', minHeight: '200px' }}/>
+                </div>
+                <div>
+                  <label htmlFor="regenModelSelect" style={{ fontSize: '0.8rem', color: '#a0aec0', marginBottom: '0.5rem', display: 'block' }}>Choose Model</label>
+                  <select id="regenModelSelect" value={regenModel} onChange={(e) => setRegenModel(e.target.value)} style={{ width: '100%', background: '#2d3748', color: '#e2e8f0', border: '1px solid #4a5568', borderRadius: '8px', padding: '0.75rem', fontSize: '0.9rem' }}>
+                    <option value="Image-Gen">Image-Gen</option>
+                    <option value="Nano-Banana">Nano-Banana</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+            <div style={{ padding: '1.5rem', borderTop: '1px solid #2d3748', display: 'flex', justifyContent: 'flex-end' }}>
+              <Button onClick={handleRegenerateSubmit} disabled={isRegenerating} style={{ background: 'linear-gradient(to right, #3b82f6, #6366f1)', color: 'white', fontWeight: '600', borderRadius: '8px', border: 'none', cursor: isRegenerating ? 'not-allowed' : 'pointer' }}>
+                {isRegenerating ? 'Sending...' : 'Send for Regeneration'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </ScreenLayout>
   );
 };
