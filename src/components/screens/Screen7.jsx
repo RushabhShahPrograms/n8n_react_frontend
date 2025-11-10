@@ -5,9 +5,11 @@ import { generateJobId } from "@/lib/utils";
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 
-const SCREEN7_URL = "https://wholesomegoods.app.n8n.cloud/webhook-test/888561d0ce-f809-410d-af07-2d11cfa91c6a"; // Placeholder URL
+const SCREEN7_URL = "https://wholesomegoods.app.n8n.cloud/webhook/888561d0ce-f809-410d-af07-2d11cfa91c6a";
+const REGENERATION_URL = "https://wholesomegoods.app.n8n.cloud/webhook/8a3ac29d-15d4-4e9c-aaad-e52199d94a34";
+const REGENERATING_IMAGES_KEY = "screen7RegeneratingImages";
 
-// Reusable polling function
+// Reusable polling function for the main generation
 const pollForResult = async (job_id) => {
   const pollTimeoutMs = 20 * 60 * 1000; // 20 minutes
   const pollIntervalMs = 2000;
@@ -22,9 +24,7 @@ const pollForResult = async (job_id) => {
         const resultData = json?.result ?? null;
         
         if (resultData) {
-          if (typeof resultData === "string") {
-            return resultData;
-          }
+          if (typeof resultData === "string") return resultData;
           const isValid = Array.isArray(resultData) && resultData.length > 0 && resultData[0]?.images;
           if (isValid) return resultData;
           throw new Error("Received data with unexpected structure.");
@@ -36,6 +36,40 @@ const pollForResult = async (job_id) => {
     await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
   }
   throw new Error("Timed out waiting for result.");
+};
+
+// Dedicated polling function for regeneration
+const pollForRegenResult = async (job_id) => {
+  const pollTimeoutMs = 20 * 60 * 1000; // 20 minutes
+  const pollIntervalMs = 2000;
+  const pollStart = Date.now();
+
+  while (Date.now() - pollStart < pollTimeoutMs) {
+    try {
+      const pollUrl = `${window.location.origin}/result/${job_id}`;
+      const r = await fetch(pollUrl);
+      if (r.status === 200) {
+        const json = await r.json();
+        const resultData = json?.result ?? null;
+
+        if (resultData && typeof resultData === 'string') {
+          const parser = new DOMParser();
+          const doc = parser.parseFromString(resultData, "text/html");
+          const imageUrl = doc.querySelector('a')?.href;
+          const prompt = doc.querySelector('div > div')?.textContent.trim();
+
+          if (imageUrl && prompt) {
+            console.log("Successfully polled and parsed regen result:", { imageUrl, prompt });
+            return { imageUrl, prompt };
+          }
+        }
+      }
+    } catch (pollError) {
+      console.warn("Polling error during regeneration:", pollError);
+    }
+    await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+  }
+  throw new Error("Timed out waiting for regeneration result.");
 };
 
 const initialFormData = {
@@ -70,13 +104,12 @@ export const Screen7 = ({ response, setResponse }) => {
   const [totalImageCount, setTotalImageCount] = useState(0);
   const [parsedResponse, setParsedResponse] = useState([]);
   
-  // START: NEW STATE FOR REGENERATION MODAL
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedImageForRegen, setSelectedImageForRegen] = useState(null); // Will store { imageUrl, prompt, hookTitle }
+  const [selectedImageForRegen, setSelectedImageForRegen] = useState(null);
   const [editablePrompt, setEditablePrompt] = useState("");
-  const [regenModel, setRegenModel] = useState("Image-Gen"); // Default model
+  const [regenModel, setRegenModel] = useState("Image-Gen");
   const [isRegenerating, setIsRegenerating] = useState(false);
-  // END: NEW STATE FOR REGENERATION MODAL
+  const [regeneratingImages, setRegeneratingImages] = useState([]);
 
   const JOB_STATE_KEY = "screen7JobState";
   const RESPONSE_KEY = "screen7Response";
@@ -91,7 +124,7 @@ export const Screen7 = ({ response, setResponse }) => {
       const resultData = await pollForResult(job_id);
       setResponse(resultData);
       setDone(true);
-      localStorage.setItem(RESPONSE_KEY, JSON.stringify(resultData));
+      localStorage.setItem(RESPONSE_KEY, resultData);
     } catch (err) {
       console.error("Error during resumed polling:", err);
       setResponse({ error: `Failed to retrieve result: ${err.message}` });
@@ -108,21 +141,28 @@ export const Screen7 = ({ response, setResponse }) => {
       const savedResponse = localStorage.getItem(RESPONSE_KEY);
 
       if (savedResponse && !response) {
-        setResponse(JSON.parse(savedResponse));
+        setResponse(savedResponse);
         setDone(true);
       }
 
       if (savedStateJSON) {
-        const { job_id, loading: wasLoading } = JSON.parse(savedStateJSON);
-        if (wasLoading) {
+        const { job_id } = JSON.parse(savedStateJSON);
+        if (job_id) {
           resumePolling(job_id);
         }
+      }
+      
+      const savedRegenerating = localStorage.getItem(REGENERATING_IMAGES_KEY);
+      if (savedRegenerating) {
+        setRegeneratingImages(JSON.parse(savedRegenerating));
       }
     } catch (e) {
       console.error("Failed to restore state from localStorage", e);
       localStorage.removeItem(JOB_STATE_KEY);
       localStorage.removeItem(RESPONSE_KEY);
+      localStorage.removeItem(REGENERATING_IMAGES_KEY);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Effect to parse the HTML response whenever it changes
@@ -194,6 +234,18 @@ export const Screen7 = ({ response, setResponse }) => {
     }
     setTotalImageCount(count);
   }, [formData]);
+
+  useEffect(() => {
+    try {
+      if (regeneratingImages.length > 0) {
+        localStorage.setItem(REGENERATING_IMAGES_KEY, JSON.stringify(regeneratingImages));
+      } else {
+        localStorage.removeItem(REGENERATING_IMAGES_KEY);
+      }
+    } catch (e) {
+      console.error("Failed to save regenerating images state:", e);
+    }
+  }, [regeneratingImages]);
 
   const handleFileChange = (e) => {
     const file = e.target.files[0];
@@ -289,7 +341,7 @@ export const Screen7 = ({ response, setResponse }) => {
       const resultData = await pollForResult(job_id);
       setResponse(resultData);
       setDone(true);
-      localStorage.setItem(RESPONSE_KEY, JSON.stringify(resultData));
+      localStorage.setItem(RESPONSE_KEY, resultData);
     } catch (err) {
       console.error("Error during generation:", err);
       setResponse({ error: `Failed: ${err.message}` });
@@ -299,21 +351,58 @@ export const Screen7 = ({ response, setResponse }) => {
     }
   };
   
+  // START: ROBUST DOWNLOAD LOGIC (from Screen3.jsx)
+  const proxies = [
+    { base: 'https://api.allorigins.win/raw?url=' },
+    { base: 'https://corsproxy.io/?' },
+    { base: 'https://api.codetabs.com/v1/proxy?quest=' }
+  ];
+
+  const getImageBlob = async (url) => {
+    try {
+      const res = await fetch(url, { mode: 'cors' });
+      if (!res.ok) throw new Error('Direct fetch failed');
+      const contentType = res.headers.get('content-type');
+      if (!contentType?.startsWith('image/')) throw new Error('Invalid content type');
+      return await res.blob();
+    } catch (e) {
+      console.warn("Direct fetch failed, trying proxies...", e);
+      const proxyPromises = proxies.map(async ({ base }) => {
+        try {
+          const proxyUrl = base + encodeURIComponent(url);
+          const res = await fetch(proxyUrl);
+          if (!res.ok) throw new Error(`Proxy ${base} failed`);
+          return await res.blob();
+        } catch {
+          throw new Error('Proxy failed');
+        }
+      });
+      return await Promise.any(proxyPromises);
+    }
+  };
+
   const downloadImage = async (url) => {
     setLoadingDownloads(prev => [...prev, url]);
     try {
-      const response = await fetch(url);
-      const blob = await response.blob();
+      const blob = await getImageBlob(url);
       saveAs(blob, `image_${Date.now()}.png`);
     } catch (error) {
-      console.error("Download failed:", error);
-      window.open(url, '_blank');
+      console.error("All download methods failed:", error);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `image_${Date.now()}.png`;
+      a.target = '_blank';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      alert("Could not download directly. The image has been opened in a new tab. Please right-click and 'Save Image As...'");
     } finally {
       setLoadingDownloads(prev => prev.filter(u => u !== url));
     }
   };
 
   const downloadSelectedImages = async () => {
+    if (selectedImages.length === 0) return;
     if (selectedImages.length === 1) {
       await downloadImage(selectedImages[0]);
       return;
@@ -322,17 +411,18 @@ export const Screen7 = ({ response, setResponse }) => {
     setLoadingDownloads(prev => [...prev, 'zip']);
     await Promise.all(selectedImages.map(async (url, i) => {
       try {
-        const response = await fetch(url);
-        const blob = await response.blob();
+        const blob = await getImageBlob(url);
         zip.file(`image_${i + 1}.png`, blob);
       } catch (e) {
-        console.error(`Failed to fetch ${url} for zipping`);
+        console.error(`Failed to fetch ${url} for zipping`, e);
+        zip.file(`FAILED_to_download_${i + 1}.txt`, `Could not download image from: ${url}`);
       }
     }));
     const zipBlob = await zip.generateAsync({ type: 'blob' });
     saveAs(zipBlob, 'selected_images.zip');
     setLoadingDownloads(prev => prev.filter(item => item !== 'zip'));
   };
+  // END: ROBUST DOWNLOAD LOGIC
 
   const handleImageSelection = (url) => {
     setSelectedImages(prev => prev.includes(url) ? prev.filter(u => u !== url) : [...prev, url]);
@@ -342,35 +432,61 @@ export const Screen7 = ({ response, setResponse }) => {
     setSelectedImages(prev => type === 'select' ? [...new Set([...prev, ...urls])] : prev.filter(url => !urls.includes(url)));
   };
 
-  // START: NEW FUNCTIONS FOR REGENERATION MODAL
   const handleOpenRegenerateModal = (imgData, hookTitle) => {
     setSelectedImageForRegen({ ...imgData, hookTitle });
     setEditablePrompt(imgData.prompt);
-    setRegenModel("Image-Gen"); // Reset to default when opening
+    setRegenModel("Image-Gen");
     setIsModalOpen(true);
   };
 
   const handleRegenerateSubmit = async () => {
     if (!selectedImageForRegen) return;
 
+    const originalImageUrl = selectedImageForRegen.imageUrl;
     setIsRegenerating(true);
-
-    // This is where the API call would go in the future.
-    // For now, we'll just log the data and simulate a delay.
-    console.log("Regeneration Data:", {
-      originalData: selectedImageForRegen,
-      newPrompt: editablePrompt,
-      model: regenModel,
-    });
-
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1500));
-
-    setIsRegenerating(false);
+    setRegeneratingImages(prev => [...prev, originalImageUrl]);
     setIsModalOpen(false);
-    setSelectedImageForRegen(null);
+
+    const dataToSend = {
+      prompt: editablePrompt,
+      model: regenModel,
+      job_id: generateJobId(),
+      callback_url: `${window.location.origin}/callback`,
+    };
+
+    try {
+      console.log("📤 Sending regeneration request:", dataToSend);
+      const res = await fetch(REGENERATION_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(dataToSend),
+      });
+
+      if (!res.ok) throw new Error(`Regeneration webhook returned ${res.status}`);
+
+      const newImageData = await pollForRegenResult(dataToSend.job_id);
+
+      setResponse(prevResponse => {
+        if (typeof prevResponse !== 'string') return prevResponse;
+        
+        const updatedResponseHtml = prevResponse
+          .replace(originalImageUrl, newImageData.imageUrl)
+          .replace(selectedImageForRegen.prompt, newImageData.prompt);
+        
+        localStorage.setItem(RESPONSE_KEY, updatedResponseHtml);
+        
+        return updatedResponseHtml;
+      });
+
+    } catch (err) {
+      console.error("Regeneration failed:", err);
+      alert(`Regeneration failed: ${err.message}`);
+    } finally {
+      setIsRegenerating(false);
+      setRegeneratingImages(prev => prev.filter(url => url !== originalImageUrl));
+      setSelectedImageForRegen(null);
+    }
   };
-  // END: NEW FUNCTIONS FOR REGENERATION MODAL
 
   const otherInputFields = [
     {
@@ -393,6 +509,7 @@ export const Screen7 = ({ response, setResponse }) => {
           localStorage.removeItem("screen7FormData");
           localStorage.removeItem(JOB_STATE_KEY);
           localStorage.removeItem(RESPONSE_KEY);
+          localStorage.removeItem(REGENERATING_IMAGES_KEY);
           setFormData(initialFormData);
           setResponse(null);
           setDone(false);
@@ -491,12 +608,17 @@ export const Screen7 = ({ response, setResponse }) => {
                   <h4 className="text-md font-semibold text-foreground mb-4">{hookData.hookTitle}</h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     {hookData.images.map((imgData, i) => (
-                      <div key={i} className="relative group">
+                      <div key={imgData.imageUrl || i} className="relative group">
+                        {regeneratingImages.includes(imgData.imageUrl) && (
+                           <div className="absolute inset-0 bg-black/70 rounded-lg flex flex-col items-center justify-center z-20">
+                             <div className="text-white font-bold text-sm text-center">Regenerating...</div>
+                           </div>
+                        )}
                         <input type="checkbox" checked={selectedImages.includes(imgData.imageUrl)} onChange={() => handleImageSelection(imgData.imageUrl)} className="absolute top-2 left-2 h-5 w-5 z-10" />
                         <img src={imgData.imageUrl} alt={`Generated for ${hookData.hookTitle} - ${i+1}`} className="w-full h-48 object-cover rounded-lg border border-border/20" />
                         <div className="absolute bottom-0 left-0 right-0 bg-black/50 p-2 flex justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <Button className="text-black" size="sm" onClick={() => downloadImage(imgData.imageUrl)} disabled={loadingDownloads.includes(imgData.imageUrl)}>{loadingDownloads.includes(imgData.imageUrl) ? '...' : 'Download'}</Button>
-                          <Button size="sm" variant="secondary" onClick={() => handleOpenRegenerateModal(imgData, hookData.hookTitle)}>Regenerate</Button>
+                          <Button className="text-black" size="sm" onClick={() => downloadImage(imgData.imageUrl)} disabled={loadingDownloads.includes(imgData.imageUrl)}>{loadingDownloads.includes(imgData.imageUrl) ? 'Downloading...' : 'Download'}</Button>
+                          <Button size="sm" variant="secondary" onClick={() => handleOpenRegenerateModal(imgData, hookData.hookTitle)} disabled={regeneratingImages.includes(imgData.imageUrl)}>Regenerate</Button>
                         </div>
                       </div>
                     ))}
@@ -520,7 +642,6 @@ export const Screen7 = ({ response, setResponse }) => {
         )}
       </div>
 
-      {/* Regeneration Modal */}
       {isModalOpen && selectedImageForRegen && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(10, 10, 20, 0.8)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }} onClick={() => setIsModalOpen(false)}>
           <div style={{ background: '#1a202c', color: '#e2e8f0', width: '60vw', maxWidth: '800px', maxHeight: '90vh', display: 'flex', flexDirection: 'column', borderRadius: '12px', boxShadow: '0 10px 30px rgba(0, 0, 0, 0.5)', border: '1px solid #2d3748', overflow: 'hidden' }} onClick={(e) => e.stopPropagation()}>
