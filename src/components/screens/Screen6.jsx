@@ -569,6 +569,8 @@ export const Screen6 = ({ setActiveTab, sharedDataForScreen6, setSharedDataForSc
               border: "none",
               opacity: (loading || (!formData.imageUrl && !uploadedImage)) ? 0.6 : 1,
             }}
+            onMouseOver={(e) => (e.currentTarget.style.filter = "brightness(1.5)")}
+            onMouseOut={(e) => (e.currentTarget.style.filter = "brightness(1)")}
           >
             {loading ? "Processing..." : "✨ Generate Videos"}
           </Button>
