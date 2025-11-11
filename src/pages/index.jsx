@@ -26,31 +26,34 @@ const Index = () => {
   const [screen6Response, setScreen6Response] = useState(null);
   const [screen7Response, setScreen7Response] = useState(null); // State for Screen7
 
-  // Shared data from MainScreen → Screen2
+  // Shared data states
   const [sharedData, setSharedData] = useState({});
   const [sharedDataForScreen3, setSharedDataForScreen3] = useState({});
   const [sharedDataForScreen4, setSharedDataForScreen4] = useState({});
   const [sharedDataForScreen5, setSharedDataForScreen5] = useState({});
   const [sharedDataForScreen6, setSharedDataForScreen6] = useState({});
+  const [sharedDataForScreen4From7, setSharedDataForScreen4From7] = useState({}); // New state for Screen7 -> Screen4 data flow
 
-  // *** FIX PART 1: Add a clearing function for the main sharedData state ***
+  // Clearing functions for shared data
   const clearSharedData = () => {
     setSharedData({});
   };
 
-  // *** FIX PART 1: Add this function to clear the shared state ***
   const clearSharedDataForScreen3 = () => {
     setSharedDataForScreen3({});
   };
 
-  // *** FIX PART 1: Add a clearing function for Screen 4's data ***
   const clearSharedDataForScreen4 = () => {
     setSharedDataForScreen4({});
   };
 
-  // *** FIX PART 1: Add a clearing function for Screen 5's data ***
   const clearSharedDataForScreen5 = () => {
     setSharedDataForScreen5({});
+  };
+  
+  // New clearing function for the new data flow
+  const clearSharedDataForScreen4From7 = () => {
+    setSharedDataForScreen4From7({});
   };
 
   return (
@@ -194,7 +197,12 @@ const Index = () => {
           </TabsContent>
 
           <TabsContent value="screen7" className="mt-0">
-            <Screen7 response={screen7Response} setResponse={setScreen7Response} />
+            <Screen7 
+              response={screen7Response} 
+              setResponse={setScreen7Response} 
+              setActiveTab={setActiveTab} 
+              setSharedDataForScreen4={setSharedDataForScreen4From7} 
+            />
           </TabsContent>
 
           <TabsContent value="screen3" className="mt-0">
@@ -202,7 +210,15 @@ const Index = () => {
           </TabsContent>
 
           <TabsContent value="screen4" className="mt-0">
-            <Screen4 response={screen4Response} setResponse={setScreen4Response} setActiveTab={setActiveTab} sharedData={sharedDataForScreen4} setSharedDataForScreen5={setSharedDataForScreen5} clearSharedData={clearSharedDataForScreen4}/>
+            <Screen4 
+              response={screen4Response} 
+              setResponse={setScreen4Response} 
+              setActiveTab={setActiveTab} 
+              sharedData={{ ...sharedDataForScreen4, ...sharedDataForScreen4From7 }} 
+              setSharedDataForScreen5={setSharedDataForScreen5} 
+              clearSharedData={clearSharedDataForScreen4}
+              clearSharedDataFrom7={clearSharedDataForScreen4From7}
+            />
           </TabsContent>
 
           <TabsContent value="screen5" className="mt-0">

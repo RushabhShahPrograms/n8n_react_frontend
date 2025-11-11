@@ -59,7 +59,7 @@ const pollForResult = async (job_id) => {
 };
 
 
-export const Screen4 = ({ response, setResponse, sharedData, setActiveTab, setSharedDataForScreen5, clearSharedData }) => {
+export const Screen4 = ({ response, setResponse, sharedData, setActiveTab, setSharedDataForScreen5, clearSharedData, clearSharedDataFrom7 }) => {
   const [activeTab] = useState("Images to videos");
   const [formData, setFormData] = useState(() => {
     try {
@@ -359,12 +359,9 @@ export const Screen4 = ({ response, setResponse, sharedData, setActiveTab, setSh
   // END: REGENERATION MODAL HANDLERS
 
   // This hook populates the form from sharedData
-  // *** FIX PART 2: Modify this hook to consume and clear the shared data ***
   useEffect(() => {
-    // Only proceed if there's sharedData to process
     if (sharedData && Object.keys(sharedData).length > 0) {
       const updates = {};
-      // Check if the form field is empty before populating from sharedData
       if (sharedData.currentScript && !formData.scripts) {
         updates.scripts = sharedData.currentScript;
       }
@@ -376,13 +373,14 @@ export const Screen4 = ({ response, setResponse, sharedData, setActiveTab, setSh
         setFormData((prev) => ({ ...prev, ...updates }));
       }
 
-      // After using the data, call the function to clear it from the parent (index.jsx)
       if (clearSharedData) {
         clearSharedData();
       }
+      if (clearSharedDataFrom7) {
+        clearSharedDataFrom7();
+      }
     }
-  // Add `clearSharedData` to the dependency array
-  }, [sharedData, clearSharedData, formData.scripts, formData.imgUrls]);
+  }, [sharedData, clearSharedData, clearSharedDataFrom7, formData.scripts, formData.imgUrls]);
 
   // Persist response when it changes
   useEffect(() => {

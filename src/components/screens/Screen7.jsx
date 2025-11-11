@@ -83,7 +83,7 @@ const initialFormData = {
     model: "Image-Gen",
 };
 
-export const Screen7 = ({ response, setResponse }) => {
+export const Screen7 = ({ response, setResponse, setActiveTab, setSharedDataForScreen4 }) => {
   const [activeTab] = useState("Hook to Image");
   const [formData, setFormData] = useState(() => {
     try {
@@ -632,13 +632,26 @@ export const Screen7 = ({ response, setResponse }) => {
       </div>
       <div className="flex justify-center mt-10">
         {!done ? (
-            <Button onClick={handleSubmit} disabled={loading} variant="default" style={{ width: '100%', maxWidth: '28rem', textAlign: "center", padding: "12px 16px", borderRadius: "9999px", fontWeight: 500, cursor: loading ? "not-allowed" : "pointer", transition: "all 0.3s", background: "linear-gradient(to right, #3b82f6, #6366f1)", color: "white", border: "none", outline: "none" }}>
-              {loading ? "Processing..." : `✨ Generate Images (${totalImageCount}/12)`}
-            </Button>
+          <Button onClick={handleSubmit} disabled={loading} variant="default" style={{ width: '100%', maxWidth: '28rem', textAlign: "center", padding: "12px 16px", borderRadius: "9999px", fontWeight: 500, cursor: loading ? "not-allowed" : "pointer", transition: "all 0.3s", background: "linear-gradient(to right, #3b82f6, #6366f1)", color: "white", border: "none", outline: "none" }}>
+            {loading ? "Processing..." : `✨ Generate Images (${totalImageCount}/12)`}
+          </Button>
+        ) : selectedImages.length > 0 ? (
+          <Button
+            onClick={() => {
+              setSharedDataForScreen4({
+                selectedImageUrls: selectedImages,
+              });
+              setActiveTab("screen4");
+            }}
+            variant="default"
+            style={{ width: '100%', maxWidth: '28rem', textAlign: "center", padding: "12px 16px", borderRadius: "9999px", fontWeight: 500, cursor: "pointer", transition: "all 0.3s", background: "linear-gradient(to right, #6366f1, #10b981)", color: "white", border: "none", outline: "none" }}
+          >
+            Go to Images to videos
+          </Button>
         ) : (
-            <Button onClick={handleSubmit} disabled={loading} variant="default" style={{ width: '100%', maxWidth: '28rem', textAlign: "center", padding: "12px 16px", borderRadius: "9999px", fontWeight: 500, cursor: "pointer", transition: "all 0.3s", background: "linear-gradient(to right, #6366f1, #10b981)", color: "white", border: "none", outline: "none" }}>
-              {loading ? "Processing..." : "✨ Generate More"}
-            </Button>
+          <Button onClick={handleSubmit} disabled={loading} variant="default" style={{ width: '100%', maxWidth: '28rem', textAlign: "center", padding: "12px 16px", borderRadius: "9999px", fontWeight: 500, cursor: "pointer", transition: "all 0.3s", background: "linear-gradient(to right, #3b82f6, #6366f1)", color: "white", border: "none", outline: "none" }}>
+            {loading ? "Processing..." : "✨ Generate More"}
+          </Button>
         )}
       </div>
 
