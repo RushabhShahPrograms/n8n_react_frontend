@@ -87,8 +87,25 @@ export const Screen4 = ({ response, setResponse, sharedData, setActiveTab, setSh
   const [selectedVideoForRegen, setSelectedVideoForRegen] = useState(null);
   const [editablePrompt, setEditablePrompt] = useState("");
   const [isRegenerating, setIsRegenerating] = useState(false);
-  const [regeneratingVideos, setRegeneratingVideos] = useState([]); // Tracks regenerating items by imageUrl
-  const [regenModel, setRegenModel] = useState("Veo3.1"); // NEW: State for the model in the regeneration modal
+  
+  // CORRECTED: Initialize regeneratingVideos from localStorage with a more robust structure.
+  const [regeneratingVideos, setRegeneratingVideos] = useState(() => {
+    try {
+      const saved = localStorage.getItem(REGENERATING_VIDEOS_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        // Validate that it's an array of objects with the expected keys
+        if (Array.isArray(parsed) && parsed.every(item => item.imageUrl && item.jobId)) {
+          return parsed;
+        }
+      }
+    } catch (e) {
+      console.error("Failed to restore regenerating videos state from localStorage:", e);
+    }
+    return []; // Default to empty array if nothing found or on error
+  });
+  
+  const [regenModel, setRegenModel] = useState("Veo3.1");
   // END: Modal and Regeneration state
 
   // Handle manual text input
@@ -312,15 +329,18 @@ export const Screen4 = ({ response, setResponse, sharedData, setActiveTab, setSh
     if (!selectedVideoForRegen) return;
     
     const originalImageUrl = selectedVideoForRegen.imageUrl;
+    const job_id = generateJobId(); // Generate a job ID for tracking
+
     setIsRegenerating(true);
-    setRegeneratingVideos(prev => [...prev, originalImageUrl]);
+    // CORRECTED: Add an object with imageUrl and jobId to the tracking state
+    setRegeneratingVideos(prev => [...prev, { imageUrl: originalImageUrl, jobId: job_id }]);
     setIsModalOpen(false);
 
     const dataToSend = {
       imageUrl: originalImageUrl,
       prompt: editablePrompt,
-      model: regenModel, // UPDATED: Send the selected model
-      job_id: generateJobId(), // Send a job_id for polling
+      model: regenModel,
+      job_id: job_id, // Send the generated job ID
       callback_url: `${window.location.origin}/callback`,
     };
 
@@ -339,7 +359,8 @@ export const Screen4 = ({ response, setResponse, sharedData, setActiveTab, setSh
       setResponse(prevResponse => {
         const updatedVideos = prevResponse[0].videos.map(video => {
           if (video.imageUrl === originalImageUrl) {
-            return newVideoData[0].videos[0];
+            // The API response for regeneration is slightly different, extract the video data
+            return newVideoData[0]?.videos[0] ?? video;
           }
           return video;
         });
@@ -353,7 +374,8 @@ export const Screen4 = ({ response, setResponse, sharedData, setActiveTab, setSh
       alert(`Regeneration failed: ${err.message}`);
     } finally {
       setIsRegenerating(false);
-      setRegeneratingVideos(prev => prev.filter(url => url !== originalImageUrl));
+      // CORRECTED: Remove the item from the tracking state by its unique jobId
+      setRegeneratingVideos(prev => prev.filter(item => item.jobId !== job_id));
     }
   };
   // END: REGENERATION MODAL HANDLERS
@@ -396,13 +418,12 @@ export const Screen4 = ({ response, setResponse, sharedData, setActiveTab, setSh
     }
   }, [response]);
 
-  // NEW: This hook persists the list of regenerating videos to localStorage
+  // Persist the list of regenerating videos to localStorage whenever it changes
   useEffect(() => {
     try {
       if (regeneratingVideos.length > 0) {
         localStorage.setItem(REGENERATING_VIDEOS_KEY, JSON.stringify(regeneratingVideos));
       } else {
-        // Clean up the key when no videos are regenerating
         localStorage.removeItem(REGENERATING_VIDEOS_KEY);
       }
     } catch (e) {
@@ -412,6 +433,43 @@ export const Screen4 = ({ response, setResponse, sharedData, setActiveTab, setSh
 
   // Resume polling/restore state on mount
   useEffect(() => {
+    // --- Function to process a single pending regeneration job ---
+    const processPendingRegeneration = async (regenItem) => {
+      const { imageUrl, jobId } = regenItem;
+      try {
+        console.log(`Resuming poll for job: ${jobId} (image: ${imageUrl})`);
+        const newVideoData = await pollForResult(jobId);
+
+        // Update the main response state with the new video data
+        setResponse(prevResponse => {
+          if (!prevResponse || !prevResponse[0]?.videos) return prevResponse;
+          const updatedVideos = prevResponse[0].videos.map(video => {
+            if (video.imageUrl === imageUrl) {
+              return newVideoData[0]?.videos[0] ?? video;
+            }
+            return video;
+          });
+          const newResponse = [{ ...prevResponse[0], videos: updatedVideos }];
+          localStorage.setItem(RESPONSE_KEY, JSON.stringify(newResponse));
+          return newResponse;
+        });
+      } catch (err) {
+        console.error(`Polling for job ${jobId} failed or timed out:`, err);
+        // Optionally handle the error, e.g., show a failure state on the specific video
+      } finally {
+        // IMPORTANT: Always remove the item from the regenerating list when done.
+        setRegeneratingVideos(prev => prev.filter(item => item.jobId !== jobId));
+      }
+    };
+
+    // --- Check for pending regenerations on mount ---
+    const pendingRegens = regeneratingVideos.filter(item => item.jobId);
+    if (pendingRegens.length > 0) {
+      console.log("Found pending regenerations on mount, resuming polling...", pendingRegens);
+      pendingRegens.forEach(processPendingRegeneration);
+    }
+
+    // --- Restore initial generation state ---
     try {
       const savedResponse = localStorage.getItem(RESPONSE_KEY);
       if (savedResponse && !response) {
@@ -449,20 +507,6 @@ export const Screen4 = ({ response, setResponse, sharedData, setActiveTab, setSh
         })();
       }
 
-      // NEW: Restore the regenerating videos state on mount
-      const savedRegenerating = localStorage.getItem(REGENERATING_VIDEOS_KEY);
-      if (savedRegenerating) {
-        try {
-          const parsedRegenerating = JSON.parse(savedRegenerating);
-          if (Array.isArray(parsedRegenerating)) {
-            setRegeneratingVideos(parsedRegenerating);
-          }
-        } catch (e) {
-          console.warn("Cleared malformed regenerating videos state from localStorage.");
-          localStorage.removeItem(REGENERATING_VIDEOS_KEY);
-        }
-      }
-
     } catch (_) {}
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -487,7 +531,6 @@ export const Screen4 = ({ response, setResponse, sharedData, setActiveTab, setSh
         onMouseOver={(e) => { e.currentTarget.style.filter = "brightness(1.1)"; }}
         onMouseOut={(e) => { e.currentTarget.style.filter = "brightness(1)"; }}
         onClick={() => {
-          // *** FIX PART 3: Correctly clear only this screen's data ***
           try {
             localStorage.removeItem("screen4FormData");
             localStorage.removeItem(JOB_STATE_KEY);
@@ -499,7 +542,7 @@ export const Screen4 = ({ response, setResponse, sharedData, setActiveTab, setSh
           setDone(false);
           setSelectedVideos([]);
           setUploadedImages([]);
-          // Also clear the file input visually
+          setRegeneratingVideos([]); // Also clear the in-memory state
           if (fileInputRef.current) fileInputRef.current.value = null;
         }}
       >
@@ -510,7 +553,7 @@ export const Screen4 = ({ response, setResponse, sharedData, setActiveTab, setSh
       </h1>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* LEFT COLUMN — Inputs + Uploads */}
+        {/* LEFT COLUMN – Inputs + Uploads */}
         <div className="lg:col-span-1 space-y-6">
           <InputSection
             title="Input Data"
@@ -526,7 +569,7 @@ export const Screen4 = ({ response, setResponse, sharedData, setActiveTab, setSh
 
           {/* Upload section */}
           <div className="bg-muted/40 border border-border/30 rounded-xl p-4">
-            <h3 className="text-sm font-medium mb-2 text-foreground/80">📁 Upload Images</h3>
+            <h3 className="text-sm font-medium mb-2 text-foreground/80">🖼 Upload Images</h3>
             <input
               type="file"
               accept="image/*"
@@ -568,7 +611,7 @@ export const Screen4 = ({ response, setResponse, sharedData, setActiveTab, setSh
           </div>
         </div>
 
-        {/* RIGHT COLUMN — Output preview */}
+        {/* RIGHT COLUMN – Output preview */}
         <div className="lg:col-span-2 space-y-6">
           {loading && (
             <div
@@ -585,7 +628,7 @@ export const Screen4 = ({ response, setResponse, sharedData, setActiveTab, setSh
               <div style={{ fontSize: 18, fontWeight: 700 }}>⏳ IN QUEUE</div>
               <div style={{ fontSize: 13, opacity: 0.9, textAlign: "center" }}>
                 Request received. Processing may take up to <strong>10–20 minutes</strong>.
-                The server is working — you can go to other screens, results will remain here when ready.
+                The server is working – you can go to other screens, results will remain here when ready.
               </div>
               <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
                 <div style={{ width: 8, height: 8, borderRadius: 8, background: "#3b82f6", animation: "bounce 0.6s infinite alternate" }} />
@@ -621,7 +664,8 @@ export const Screen4 = ({ response, setResponse, sharedData, setActiveTab, setSh
                 {response[0].videos.map((videoData, i) => {
                   const { videoUrl, imageUrl } = videoData;
                   const isError = typeof videoUrl !== 'string' || !videoUrl.startsWith('http');
-                  const isCurrentlyRegenerating = regeneratingVideos.includes(imageUrl);
+                  // CORRECTED: Check against the new state structure
+                  const isCurrentlyRegenerating = regeneratingVideos.some(item => item.imageUrl === imageUrl);
 
                   return (
                     <div key={imageUrl || i} className="relative flex flex-col items-center gap-2 bg-card/50 p-3 rounded-lg border border-border/20 w-full">
@@ -654,7 +698,7 @@ export const Screen4 = ({ response, setResponse, sharedData, setActiveTab, setSh
                           <video
                             src={videoUrl}
                             controls
-                            style={{ width: "100%", height: "160px", objectFit: "cover" }}
+                            style={{ width: "100%", height: "160px", objectFit: "contain" }}
                             className="rounded-lg border border-border/20"
                           />
                           <div className="flex gap-2 mt-2">
@@ -821,7 +865,6 @@ export const Screen4 = ({ response, setResponse, sharedData, setActiveTab, setSh
                   }}
                 />
               </div>
-              {/* --- NEW CODE START --- */}
               <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
                 <div style={{ flex: 1 }}>
                   <label htmlFor="regenModelSelect" style={{ fontSize: '0.8rem', color: '#a0aec0', marginBottom: '0.5rem', display: 'block' }}>
@@ -864,7 +907,6 @@ export const Screen4 = ({ response, setResponse, sharedData, setActiveTab, setSh
                   {isRegenerating ? 'Sending...' : 'Send for Regeneration'}
                 </Button>
               </div>
-              {/* --- NEW CODE END --- */}
             </div>
 
             <div style={{ flex: 2, background: '#000', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '2rem' }}>
