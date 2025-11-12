@@ -247,6 +247,8 @@ export const MainScreen = ({ response, setResponse, loading, setLoading, done, s
               border: "none",
               outline: "none",
             }}
+            onMouseOver={(e) => (e.currentTarget.style.filter = "brightness(1.5)")}
+            onMouseOut={(e) => (e.currentTarget.style.filter = "brightness(1)")}
           >
             {loading ? (
               <span className="flex items-center space-x-2">

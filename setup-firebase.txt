@@ -1,0 +1,35 @@
+1) Firebase console — create project & enable Google sign-in
+
+- Open: https://console.firebase.google.com/ and sign in with your Google account.
+- Click Add project (or open an existing project you want to use for testing).
+	-Project name: anything (e.g., whg-test).
+	-You can skip Analytics for now.
+	-Finish creating the project.
+- In your project sidebar, go to Authentication → Get started (if you haven’t already).
+- Inside Authentication, open the Sign-in method tab.
+	- Click Google and toggle Enable.
+	- Save.
+- Still in Authentication, open Settings (the gear icon → Project settings) OR go to Project settings (⚙️ icon top-left) → General tab. You’ll need the Firebase config later (under “Your apps”).
+- Add Authorized domains (inside Authentication → Sign-in method page, scroll down to Authorized domains)
+	- Add localhost (or localhost:3000 if prompted).
+	- Add your production domain when you deploy (e.g., app.wholesomegoods.com).
+
+2) Get the Firebase config (to paste in your app)
+
+- In Firebase console → Project overview, click the web “</>” icon to register a web app.
+	- App nickname: dev-app (or whatever).
+	- Register app, then Firebase shows a firebaseConfig object (apiKey, authDomain, projectId, etc.).
+- Copy that firebaseConfig — you’ll paste it into src/firebase.js.
+
+
+3) Update your React app — dependencies and firebase init
+ - Open your project folder in terminal.
+ - Install packages: npm install firebase react-firebase-hooks
+ - src/firebase.js (paste what you copied)
+ 
+4) Add Login.jsx page (simple Google sign-in)
+	- Create src/pages/Login.jsx:
+
+5) Protect the Index route — update App.jsx
+
+run app : npm run dev

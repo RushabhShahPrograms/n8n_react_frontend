@@ -551,11 +551,17 @@ export const Screen5 = ({ response, setResponse, sharedData, setActiveTab, setSh
 
       <div className="flex justify-center mt-10">
         {!done ? (
-        <Button onClick={handleSubmit} disabled={loading} variant="default" style={{ flex: 1, textAlign: "center", padding: "12px 16px", borderRadius: "9999px", fontWeight: 500, cursor: loading ? "not-allowed" : "pointer", transition: "all 0.3s", background: "linear-gradient(to right, #3b82f6, #6366f1)", color: "white", border: "none", outline: "none" }}>
+        <Button onClick={handleSubmit} disabled={loading} variant="default" style={{ flex: 1, textAlign: "center", padding: "12px 16px", borderRadius: "9999px", fontWeight: 500, cursor: loading ? "not-allowed" : "pointer", transition: "all 0.3s", background: "linear-gradient(to right, #3b82f6, #6366f1)", color: "white", border: "none", outline: "none" }}
+        onMouseOver={(e) => (e.currentTarget.style.filter = "brightness(1.5)")}
+        onMouseOut={(e) => (e.currentTarget.style.filter = "brightness(1)")}
+        >
           {loading ? "Processing..." : "✨ Generate"}
         </Button>
         ) : (
-        <Button onClick={() => {}} disabled={loading} variant="default" style={{ flex: 1, textAlign: "center", padding: "12px 16px", borderRadius: "9999px", fontWeight: 500, cursor: "pointer", transition: "all 0.3s", background: "linear-gradient(to right, #6366f1, #10b981)", color: "white", border: "none", outline: "none" }}>
+        <Button onClick={() => {}} disabled={loading} variant="default" style={{ flex: 1, textAlign: "center", padding: "12px 16px", borderRadius: "9999px", fontWeight: 500, cursor: "pointer", transition: "all 0.3s", background: "linear-gradient(to right, #6366f1, #10b981)", color: "white", border: "none", outline: "none" }}
+        onMouseOver={(e) => (e.currentTarget.style.filter = "brightness(1.5)")}
+        onMouseOut={(e) => (e.currentTarget.style.filter = "brightness(1)")}
+        >
           {loading ? "Processing..." : "Generation Complete"}
         </Button>
         )}
