@@ -524,7 +524,7 @@ export const Screen6 = ({ setActiveTab, sharedDataForScreen6, setSharedDataForSc
                             controls
                             loop
                             playsInline
-                            style={{ width: "160px", height: "160px", objectFit: "cover" }}
+                            style={{ width: "100%", height: "160px", objectFit: "contain" }}
                             className="rounded-lg border border-border/20"
                           />
                           <button

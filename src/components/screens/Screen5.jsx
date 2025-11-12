@@ -81,8 +81,24 @@ export const Screen5 = ({ response, setResponse, sharedData, setActiveTab, setSh
   const [selectedVideoForRegen, setSelectedVideoForRegen] = useState(null);
   const [editablePrompt, setEditablePrompt] = useState("");
   const [isRegenerating, setIsRegenerating] = useState(false);
-  const [regeneratingVideos, setRegeneratingVideos] = useState([]); // Tracks regenerating items by videoUrl
-  const [regenModel, setRegenModel] = useState("Kling"); // State for the model in the regeneration modal
+  
+  // CORRECTED: Initialize state directly from localStorage to prevent race conditions
+  const [regeneratingVideos, setRegeneratingVideos] = useState(() => {
+    try {
+      const saved = localStorage.getItem(REGENERATING_VIDEOS_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return parsed;
+        }
+      }
+    } catch (e) {
+      console.error("Failed to restore regenerating videos state from localStorage:", e);
+    }
+    return []; // Default to empty array if nothing found or on error
+  });
+
+  const [regenModel, setRegenModel] = useState("Kling");
   // END: Modal and Regeneration state
 
   useEffect(() => {
@@ -126,7 +142,7 @@ export const Screen5 = ({ response, setResponse, sharedData, setActiveTab, setSh
     }
   }, [response]);
 
-  // NEW: Persist the list of regenerating videos to localStorage
+  // Persist the list of regenerating videos to localStorage whenever it changes
   useEffect(() => {
     try {
       if (regeneratingVideos.length > 0) {
@@ -175,19 +191,7 @@ export const Screen5 = ({ response, setResponse, sharedData, setActiveTab, setSh
           }
         })();
       }
-
-      // NEW: Restore the regenerating videos state on mount
-      const savedRegenerating = localStorage.getItem(REGENERATING_VIDEOS_KEY);
-      if (savedRegenerating) {
-        try {
-          const parsedRegenerating = JSON.parse(savedRegenerating);
-          if (Array.isArray(parsedRegenerating)) {
-            setRegeneratingVideos(parsedRegenerating);
-          }
-        } catch (e) {
-          localStorage.removeItem(REGENERATING_VIDEOS_KEY);
-        }
-      }
+      // REMOVED: Redundant loading logic is no longer needed here
     } catch (_) {}
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -377,7 +381,6 @@ export const Screen5 = ({ response, setResponse, sharedData, setActiveTab, setSh
     setRegeneratingVideos(prev => [...prev, originalVideoUrl]);
     setIsModalOpen(false);
 
-    // *** MODIFIED PART: Only send the required fields for regeneration ***
     const dataToSend = {
       scriptText: selectedVideoForRegen.scriptText,
       prompt: editablePrompt,
@@ -399,11 +402,10 @@ export const Screen5 = ({ response, setResponse, sharedData, setActiveTab, setSh
       const newVideoData = await pollForResult(dataToSend.job_id);
 
       setResponse(prevResponse => {
-        // Assuming the new data comes back in the same structure
         const newVideo = newVideoData[0].videos[0];
         const updatedVideos = prevResponse[0].videos.map(video => {
           if (video.videoUrl === originalVideoUrl) {
-            return newVideo; // Replace the old video with the new one
+            return newVideo;
           }
           return video;
         });
@@ -455,6 +457,7 @@ export const Screen5 = ({ response, setResponse, sharedData, setActiveTab, setSh
           setResponse(null);
           setDone(false);
           setSelectedVideos([]);
+          setRegeneratingVideos([]); // Also clear the in-memory state
         }}
       >
         Clear Inputs
@@ -529,7 +532,7 @@ export const Screen5 = ({ response, setResponse, sharedData, setActiveTab, setSh
                       ) : (
                         <>
                           <input type="checkbox" checked={selectedVideos.includes(videoUrl)} onChange={() => handleVideoSelection(videoUrl)} className="absolute top-2 left-2 h-5 w-5 z-10 cursor-pointer" />
-                          <video src={videoUrl} controls loop playsInline style={{ width: "100%", height: "160px", objectFit: "cover" }} className="rounded-lg border border-border/20" />
+                          <video src={videoUrl} controls loop playsInline style={{ width: "100%", height: "160px", objectFit: "contain" }} className="rounded-lg border border-border/20" />
                           <div className="flex gap-2 mt-2">
                             <button onClick={() => downloadVideo(videoUrl, `video_${i + 1}.mp4`)} className="px-3 py-1 text-xs rounded-md bg-blue-500 text-white hover:bg-blue-600 transition-colors" disabled={loadingDownloads.includes(videoUrl)}>
                               {loadingDownloads.includes(videoUrl) ? 'Downloading...' : 'Download'}
