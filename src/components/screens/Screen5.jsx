@@ -8,9 +8,11 @@ import { saveAs } from 'file-saver';
 
 const Screen5URL = "https://wholesomegoods.app.n8n.cloud/webhook/2118f781-4da7-450f-8ecf-61b15e111c24";
 const REGENERATION_URL = "https://wholesomegoods.app.n8n.cloud/webhook/2118f781-4da7-450f-8ecf-61b15e334c24";
+const HISTORY_URL = "https://wholesomegoods.app.n8n.cloud/webhook/678cec51-2868-4b97-ad80-238eb5b78659"; // <-- NEW: History Webhook
 const REGENERATING_VIDEOS_KEY = "screen5RegeneratingVideos";
+const HISTORY_KEY = "screen5History"; // <-- NEW: Key for localStorage
 
-// Reusable and robust polling function (adapted from Screen4)
+// Reusable and robust polling function
 const pollForResult = async (job_id) => {
   const pollTimeoutMs = 20 * 60 * 1000; // 20 minutes
   const pollIntervalMs = 2000;
@@ -35,7 +37,6 @@ const pollForResult = async (job_id) => {
             }
           }
 
-          // Validate the structure for both initial and regeneration
           const isValid = Array.isArray(parsedData) && parsedData.length > 0 && parsedData[0]?.videos;
           if (isValid) {
             return parsedData;
@@ -81,25 +82,25 @@ export const Screen5 = ({ response, setResponse, sharedData, setActiveTab, setSh
   const [selectedVideoForRegen, setSelectedVideoForRegen] = useState(null);
   const [editablePrompt, setEditablePrompt] = useState("");
   const [isRegenerating, setIsRegenerating] = useState(false);
-  
-  // CORRECTED: Initialize state directly from localStorage to prevent race conditions
   const [regeneratingVideos, setRegeneratingVideos] = useState(() => {
     try {
       const saved = localStorage.getItem(REGENERATING_VIDEOS_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          return parsed;
-        }
+        if (Array.isArray(parsed)) return parsed;
       }
     } catch (e) {
       console.error("Failed to restore regenerating videos state from localStorage:", e);
     }
-    return []; // Default to empty array if nothing found or on error
+    return [];
   });
-
   const [regenModel, setRegenModel] = useState("Kling");
   // END: Modal and Regeneration state
+
+  // START: NEW HISTORY STATE
+  const [history, setHistory] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  // END: NEW HISTORY STATE
 
   useEffect(() => {
     if (sharedData && Object.keys(sharedData).length > 0) {
@@ -115,9 +116,7 @@ export const Screen5 = ({ response, setResponse, sharedData, setActiveTab, setSh
         }
         return prev;
       });
-      if (clearSharedData) {
-        clearSharedData();
-      }
+      if (clearSharedData) clearSharedData();
     }
   }, [sharedData, clearSharedData]);
 
@@ -142,7 +141,6 @@ export const Screen5 = ({ response, setResponse, sharedData, setActiveTab, setSh
     }
   }, [response]);
 
-  // Persist the list of regenerating videos to localStorage whenever it changes
   useEffect(() => {
     try {
       if (regeneratingVideos.length > 0) {
@@ -155,7 +153,25 @@ export const Screen5 = ({ response, setResponse, sharedData, setActiveTab, setSh
     }
   }, [regeneratingVideos]);
 
-  // Resume polling/restore state on mount
+  // START: NEW USEEFFECTS FOR HISTORY
+  useEffect(() => {
+    try {
+      const savedHistory = localStorage.getItem(HISTORY_KEY);
+      if (savedHistory) {
+        setHistory(JSON.parse(savedHistory));
+      }
+    } catch (_) {}
+  }, []);
+
+  useEffect(() => {
+    try {
+      if (history.length > 0) {
+        localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+      }
+    } catch (_) {}
+  }, [history]);
+  // END: NEW USEEFFECTS FOR HISTORY
+
   useEffect(() => {
     try {
       const savedResponse = localStorage.getItem(RESPONSE_KEY);
@@ -191,7 +207,6 @@ export const Screen5 = ({ response, setResponse, sharedData, setActiveTab, setSh
           }
         })();
       }
-      // REMOVED: Redundant loading logic is no longer needed here
     } catch (_) {}
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -225,7 +240,6 @@ export const Screen5 = ({ response, setResponse, sharedData, setActiveTab, setSh
         job_id,
         callback_url,
     };
-    console.log("📤 Data sent to backend:", dataToSend);
     try {
       const res = await fetch(Screen5URL, {
         method: "POST",
@@ -254,7 +268,6 @@ export const Screen5 = ({ response, setResponse, sharedData, setActiveTab, setSh
     }
   };
 
-  // START: VIDEO DOWNLOAD FUNCTIONS
   const getFilenameFromUrl = (url) => {
     try {
       const pathname = new URL(url).pathname;
@@ -273,7 +286,6 @@ export const Screen5 = ({ response, setResponse, sharedData, setActiveTab, setSh
       if (!contentType?.startsWith('video/')) throw new Error('Invalid content type');
       return await res.blob();
     } catch (e) {
-      console.warn("Direct fetch failed, trying proxies...", e);
       const proxies = [
         { base: 'https://api.allorigins.win/raw?url=' },
         { base: 'https://corsproxy.io/?' },
@@ -307,7 +319,6 @@ export const Screen5 = ({ response, setResponse, sharedData, setActiveTab, setSh
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      alert("Could not download directly. The video has been opened in a new tab. Please right-click and 'Save Video As...'");
     } finally {
       setLoadingDownloads(prev => prev.filter(item => item !== url));
     }
@@ -334,7 +345,6 @@ export const Screen5 = ({ response, setResponse, sharedData, setActiveTab, setSh
           const ext = filename.includes('.') ? `.${filename.split('.').pop()}` : '.mp4';
           zip.file(`video_${i + 1}${ext}`, blob);
         } catch (err) {
-          console.error(`Failed to fetch ${url} for zipping:`, err);
           zip.file(`FAILED_video_${i + 1}.txt`, `Could not download video from: ${url}`);
         }
       });
@@ -344,7 +354,6 @@ export const Screen5 = ({ response, setResponse, sharedData, setActiveTab, setSh
       saveAs(zipBlob, 'selected_videos.zip');
     } catch (err) {
       console.error('Batch download failed:', err);
-      alert('An error occurred while creating the zip file. Please try downloading them individually.');
     } finally {
       setLoadingDownloads(prev => prev.filter(item => item !== 'zip'));
     }
@@ -363,13 +372,11 @@ export const Screen5 = ({ response, setResponse, sharedData, setActiveTab, setSh
       setSelectedVideos((prev) => prev.filter((url) => !urls.includes(url)));
     }
   };
-  // END: VIDEO DOWNLOAD FUNCTIONS
 
-  // START: REGENERATION MODAL HANDLERS
   const handleOpenRegenerateModal = (videoData) => {
     setSelectedVideoForRegen(videoData);
     setEditablePrompt(videoData.videoPrompt);
-    setRegenModel("Kling"); // Reset to default model when opening
+    setRegenModel("Kling");
     setIsModalOpen(true);
   };
 
@@ -390,7 +397,6 @@ export const Screen5 = ({ response, setResponse, sharedData, setActiveTab, setSh
     };
 
     try {
-      console.log("📤 Sending regeneration request:", dataToSend);
       const res = await fetch(REGENERATION_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -422,7 +428,41 @@ export const Screen5 = ({ response, setResponse, sharedData, setActiveTab, setSh
       setRegeneratingVideos(prev => prev.filter(url => url !== originalVideoUrl));
     }
   };
-  // END: REGENERATION MODAL HANDLERS
+
+  // START: NEW HISTORY FETCH FUNCTION
+  const handleRefreshHistory = async () => {
+    setHistoryLoading(true);
+    setHistory([]);
+
+    try {
+      const res = await fetch(HISTORY_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+
+      if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(`History webhook returned ${res.status}: ${errorText}`);
+      }
+
+      const parsedHistory = await res.json();
+      
+      if (Array.isArray(parsedHistory)) {
+        const formattedHistory = parsedHistory.map(item => item.json).filter(Boolean);
+        setHistory(formattedHistory);
+      } else {
+        setHistory([]);
+      }
+
+    } catch (err) {
+      console.error("Error fetching history:", err);
+      alert(`Failed to fetch history: ${err.message}`);
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+  // END: NEW HISTORY FETCH FUNCTION
 
   const inputFields = [
     { label: "Current Script", name: "currentScript", placeholder: "Enter Current Script", type: "textarea", require: true },
@@ -453,11 +493,13 @@ export const Screen5 = ({ response, setResponse, sharedData, setActiveTab, setSh
           localStorage.removeItem(JOB_STATE_KEY);
           localStorage.removeItem(RESPONSE_KEY);
           localStorage.removeItem(REGENERATING_VIDEOS_KEY);
+          localStorage.removeItem(HISTORY_KEY); // <-- NEW: Clear history
           setFormData({ currentScript: "", winningAngle: "", inspiration: "", boardInsights: "Please select an option", model: "Kling" });
           setResponse(null);
           setDone(false);
           setSelectedVideos([]);
-          setRegeneratingVideos([]); // Also clear the in-memory state
+          setRegeneratingVideos([]);
+          setHistory([]); // <-- NEW: Clear history
         }}
       >
         Clear Inputs
@@ -554,23 +596,80 @@ export const Screen5 = ({ response, setResponse, sharedData, setActiveTab, setSh
 
       <div className="flex justify-center mt-10">
         {!done ? (
-        <Button onClick={handleSubmit} disabled={loading} variant="default" style={{ flex: 1, textAlign: "center", padding: "12px 16px", borderRadius: "9999px", fontWeight: 500, cursor: loading ? "not-allowed" : "pointer", transition: "all 0.3s", background: "linear-gradient(to right, #3b82f6, #6366f1)", color: "white", border: "none", outline: "none" }}
-        onMouseOver={(e) => (e.currentTarget.style.filter = "brightness(1.5)")}
-        onMouseOut={(e) => (e.currentTarget.style.filter = "brightness(1)")}
-        >
+        <Button onClick={handleSubmit} disabled={loading} variant="default" style={{ flex: 1, textAlign: "center", padding: "12px 16px", borderRadius: "9999px", fontWeight: 500, cursor: loading ? "not-allowed" : "pointer", transition: "all 0.3s", background: "linear-gradient(to right, #3b82f6, #6366f1)", color: "white", border: "none", outline: "none" }}>
           {loading ? "Processing..." : "✨ Generate"}
         </Button>
         ) : (
-        <Button onClick={() => {}} disabled={loading} variant="default" style={{ flex: 1, textAlign: "center", padding: "12px 16px", borderRadius: "9999px", fontWeight: 500, cursor: "pointer", transition: "all 0.3s", background: "linear-gradient(to right, #6366f1, #10b981)", color: "white", border: "none", outline: "none" }}
-        onMouseOver={(e) => (e.currentTarget.style.filter = "brightness(1.5)")}
-        onMouseOut={(e) => (e.currentTarget.style.filter = "brightness(1)")}
-        >
+        <Button onClick={() => {}} disabled={loading} variant="default" style={{ flex: 1, textAlign: "center", padding: "12px 16px", borderRadius: "9999px", fontWeight: 500, cursor: "pointer", transition: "all 0.3s", background: "linear-gradient(to right, #6366f1, #10b981)", color: "white", border: "none", outline: "none" }}>
           {loading ? "Processing..." : "Generation Complete"}
         </Button>
         )}
       </div>
 
-      {/* Regeneration Modal */}
+      {/* START: NEW HISTORY SECTION */}
+      <div className="mt-12">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl font-bold text-white">📋 Generation History</h2>
+          <Button 
+            onClick={handleRefreshHistory} 
+            disabled={historyLoading}
+            variant="outline"
+            style={{ background: "#3b82f6", color: "white" }}
+          >
+            {historyLoading ? "Loading..." : "🔄 Refresh History"}
+          </Button>
+        </div>
+        {history.length > 0 ? (
+          <div className="overflow-x-auto bg-white rounded-lg shadow-lg p-1">
+            <table className="w-full text-sm text-left table-auto border-collapse border-4 border-black" style={{ borderWidth: '3px', borderColor: '#000' }}>
+              <thead className="text-xs uppercase bg-gray-200">
+                <tr>
+                  <th className="px-4 py-3 border-4 border-black w-[25%] bg-gray-100 font-bold text-black" style={{ borderWidth: '3px' }}>Scripts</th>
+                  <th className="px-4 py-3 border-4 border-black w-[15%] bg-gray-100 font-bold text-black" style={{ borderWidth: '3px' }}>Winning Angle</th>
+                  <th className="px-4 py-3 border-4 border-black w-[25%] bg-gray-100 font-bold text-black" style={{ borderWidth: '3px' }}>Board Insights</th>
+                  <th className="px-4 py-3 border-4 border-black w-[20%] bg-gray-100 font-bold text-black" style={{ borderWidth: '3px' }}>Generated Videos</th>
+                  <th className="px-4 py-3 border-4 border-black w-[5%] bg-gray-100 font-bold text-black" style={{ borderWidth: '3px' }}>Model</th>
+                  <th className="px-4 py-3 border-4 border-black w-[10%] bg-gray-100 font-bold text-black" style={{ borderWidth: '3px' }}>Job ID</th>
+                </tr>
+              </thead>
+              <tbody>
+                {history.map((row, idx) => (
+                  <tr key={idx} className="border-4 border-black hover:bg-gray-50" style={{ borderWidth: '3px' }}>
+                    <td
+                      className="px-4 py-3 align-top text-xs border-4 border-black break-words text-black"
+                      style={{ borderWidth: '3px' }}
+                      dangerouslySetInnerHTML={{ __html: row.Scripts }}
+                    />
+                    <td className="px-4 py-3 align-top text-xs border-4 border-black break-words text-black" style={{ borderWidth: '3px' }}>
+                      {row["Winning Angle"]}
+                    </td>
+                    <td
+                      className="px-4 py-3 align-top text-xs border-4 border-black break-words text-black"
+                      style={{ borderWidth: '3px' }}
+                      dangerouslySetInnerHTML={{ __html: row["Board Insights"] }}
+                    />
+                    <td className="px-4 py-3 align-top border-4 border-black" style={{ borderWidth: '3px' }}>
+                      <div className="grid grid-cols-2 gap-2">
+                        {row["Generated Videos"]?.split(',').map((url, i) => (
+                          url.trim() && <video key={i} src={url.trim()} controls className="w-full h-auto rounded-md border border-black border-2"/>
+                        ))}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 align-top text-xs border-4 border-black text-black" style={{ borderWidth: '3px' }}>{row.Model}</td>
+                    <td className="px-4 py-3 align-top text-xs border-4 border-black break-all text-black" style={{ borderWidth: '3px' }}>{row["Job ID"]}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : historyLoading ? (
+          <div className="text-center p-4 text-muted-foreground">Loading history...</div>
+        ) : (
+          <div className="text-center p-4 text-muted-foreground">No history available. Click Refresh to load.</div>
+        )}
+      </div>
+      {/* END: NEW HISTORY SECTION */}
+
       {isModalOpen && selectedVideoForRegen && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(10, 10, 20, 0.8)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }} onClick={() => setIsModalOpen(false)}>
           <div style={{ background: '#1a202c', color: '#e2e8f0', width: '90vw', height: '90vh', display: 'flex', borderRadius: '12px', boxShadow: '0 10px 30px rgba(0, 0, 0, 0.5)', border: '1px solid #2d3748', overflow: 'hidden' }} onClick={(e) => e.stopPropagation()}>
