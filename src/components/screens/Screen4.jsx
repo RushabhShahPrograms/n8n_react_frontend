@@ -8,7 +8,9 @@ import { saveAs } from 'file-saver';
 
 const Screen4URL = "https://wholesomegoods.app.n8n.cloud/webhook/4cb69651-738b-4cb9-b38f-55e2eeb797ef";
 const REGENERATION_URL = "https://wholesomegoods.app.n8n.cloud/webhook/d491aeb8-9f85-409c-9313-674acaa733f7";
+const HISTORY_URL = "https://wholesomegoods.app.n8n.cloud/webhook/2ee3c0e8-ac53-4532-b136-63fefcfd4baf";
 const REGENERATING_VIDEOS_KEY = "screen4RegeneratingVideos";
+const HISTORY_KEY = "screen4History";
 
 // Reusable and robust polling function
 const pollForResult = async (job_id) => {
@@ -26,7 +28,6 @@ const pollForResult = async (job_id) => {
         
         if (resultData) {
           let parsedData = resultData;
-          // Defensively parse if the result is a string
           if (typeof parsedData === "string") {
             try {
               parsedData = JSON.parse(parsedData);
@@ -36,10 +37,9 @@ const pollForResult = async (job_id) => {
             }
           }
 
-          // Validate the structure of the parsed data
           const isValid = 
-            (Array.isArray(parsedData) && parsedData.length > 0 && parsedData[0]?.videos) || // For initial generation
-            (typeof parsedData === 'object' && parsedData !== null && parsedData.videoUrl); // For regeneration
+            (Array.isArray(parsedData) && parsedData.length > 0 && parsedData[0]?.videos) ||
+            (typeof parsedData === 'object' && parsedData !== null && parsedData.videoUrl);
 
           if (isValid) {
             return parsedData;
@@ -50,7 +50,6 @@ const pollForResult = async (job_id) => {
         }
       }
     } catch (pollError) {
-      // Ignore intermittent polling errors, but log them for debugging
       console.warn("Polling error:", pollError);
     }
     await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
@@ -72,14 +71,13 @@ export const Screen4 = ({ response, setResponse, sharedData, setActiveTab, setSh
       model: sharedData?.model || "Veo3.1",
     };
   });
-  console.log("Shared Data:", sharedData);
   const [uploadedImages, setUploadedImages] = useState([]);
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
   const [selectedVideos, setSelectedVideos] = useState([]);
   const [loadingDownloads, setLoadingDownloads] = useState([]);
-  const JOB_STATE_KEY = "screen4JobState"; // { job_id, pollStartMs, loading, done }
-  const RESPONSE_KEY = "screen4Response"; // stringified JSON or string
+  const JOB_STATE_KEY = "screen4JobState";
+  const RESPONSE_KEY = "screen4Response";
   const fileInputRef = useRef(null);
 
   // START: Modal and Regeneration state
@@ -87,14 +85,11 @@ export const Screen4 = ({ response, setResponse, sharedData, setActiveTab, setSh
   const [selectedVideoForRegen, setSelectedVideoForRegen] = useState(null);
   const [editablePrompt, setEditablePrompt] = useState("");
   const [isRegenerating, setIsRegenerating] = useState(false);
-  
-  // CORRECTED: Initialize regeneratingVideos from localStorage with a more robust structure.
   const [regeneratingVideos, setRegeneratingVideos] = useState(() => {
     try {
       const saved = localStorage.getItem(REGENERATING_VIDEOS_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
-        // Validate that it's an array of objects with the expected keys
         if (Array.isArray(parsed) && parsed.every(item => item.imageUrl && item.jobId)) {
           return parsed;
         }
@@ -102,23 +97,41 @@ export const Screen4 = ({ response, setResponse, sharedData, setActiveTab, setSh
     } catch (e) {
       console.error("Failed to restore regenerating videos state from localStorage:", e);
     }
-    return []; // Default to empty array if nothing found or on error
+    return [];
   });
-  
   const [regenModel, setRegenModel] = useState("Veo3.1");
   // END: Modal and Regeneration state
 
-  // Handle manual text input
+  // START: HISTORY STATE
+  const [history, setHistory] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  // END: HISTORY STATE
+
   const handleInputChange = (name, value) => {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  // Auto-save to localStorage
   useEffect(() => {
     try { localStorage.setItem("screen4FormData", JSON.stringify(formData)); } catch (_) {}
   }, [formData]);
 
-  // Handle local uploads
+  useEffect(() => {
+    try {
+      const savedHistory = localStorage.getItem(HISTORY_KEY);
+      if (savedHistory) {
+        setHistory(JSON.parse(savedHistory));
+      }
+    } catch (_) {}
+  }, []);
+
+  useEffect(() => {
+    try {
+      if (history.length > 0) {
+        localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+      }
+    } catch (_) {}
+  }, [history]);
+
   const handleFileUpload = (e) => {
     const files = Array.from(e.target.files);
     files.forEach((file) => {
@@ -166,8 +179,6 @@ export const Screen4 = ({ response, setResponse, sharedData, setActiveTab, setSh
       callback_url,
     };
 
-    console.log("📤 Data sent to backend:", dataToSend);
-
     try {
       const res = await fetch(Screen4URL, {
         method: "POST",
@@ -196,7 +207,6 @@ export const Screen4 = ({ response, setResponse, sharedData, setActiveTab, setSh
     }
   };
 
-  // START: VIDEO DOWNLOAD FUNCTION
   const getFilenameFromUrl = (url) => {
     try {
       const urlObj = new URL(url);
@@ -314,14 +324,11 @@ export const Screen4 = ({ response, setResponse, sharedData, setActiveTab, setSh
       setSelectedVideos((prev) => prev.filter((url) => !urls.includes(url)));
     }
   };
-  // END: VIDEO DOWNLOAD FUNCTION
 
-  // START: REGENERATION MODAL HANDLERS
   const handleOpenRegenerateModal = (videoData) => {
-    console.log("Data received by modal:", videoData); 
     setSelectedVideoForRegen(videoData);
     setEditablePrompt(videoData.animationPrompt);
-    setRegenModel("Veo3.1"); // Reset to default model when opening
+    setRegenModel("Veo3.1");
     setIsModalOpen(true);
   };
 
@@ -329,10 +336,9 @@ export const Screen4 = ({ response, setResponse, sharedData, setActiveTab, setSh
     if (!selectedVideoForRegen) return;
     
     const originalImageUrl = selectedVideoForRegen.imageUrl;
-    const job_id = generateJobId(); // Generate a job ID for tracking
+    const job_id = generateJobId();
 
     setIsRegenerating(true);
-    // CORRECTED: Add an object with imageUrl and jobId to the tracking state
     setRegeneratingVideos(prev => [...prev, { imageUrl: originalImageUrl, jobId: job_id }]);
     setIsModalOpen(false);
 
@@ -340,12 +346,11 @@ export const Screen4 = ({ response, setResponse, sharedData, setActiveTab, setSh
       imageUrl: originalImageUrl,
       prompt: editablePrompt,
       model: regenModel,
-      job_id: job_id, // Send the generated job ID
+      job_id: job_id,
       callback_url: `${window.location.origin}/callback`,
     };
 
     try {
-      console.log("📤 Sending regeneration request:", dataToSend);
       const res = await fetch(REGENERATION_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -359,7 +364,6 @@ export const Screen4 = ({ response, setResponse, sharedData, setActiveTab, setSh
       setResponse(prevResponse => {
         const updatedVideos = prevResponse[0].videos.map(video => {
           if (video.imageUrl === originalImageUrl) {
-            // The API response for regeneration is slightly different, extract the video data
             return newVideoData[0]?.videos[0] ?? video;
           }
           return video;
@@ -374,13 +378,43 @@ export const Screen4 = ({ response, setResponse, sharedData, setActiveTab, setSh
       alert(`Regeneration failed: ${err.message}`);
     } finally {
       setIsRegenerating(false);
-      // CORRECTED: Remove the item from the tracking state by its unique jobId
       setRegeneratingVideos(prev => prev.filter(item => item.jobId !== job_id));
     }
   };
-  // END: REGENERATION MODAL HANDLERS
 
-  // This hook populates the form from sharedData
+  const handleRefreshHistory = async () => {
+    setHistoryLoading(true);
+    setHistory([]);
+
+    try {
+      const res = await fetch(HISTORY_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+
+      if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(`History webhook returned ${res.status}: ${errorText}`);
+      }
+
+      const parsedHistory = await res.json();
+      
+      if (Array.isArray(parsedHistory)) {
+        const formattedHistory = parsedHistory.map(item => item.json).filter(Boolean);
+        setHistory(formattedHistory);
+      } else {
+        setHistory([]);
+      }
+
+    } catch (err) {
+      console.error("Error fetching history:", err);
+      alert(`Failed to fetch history: ${err.message}`);
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (sharedData && Object.keys(sharedData).length > 0) {
       const updates = {};
@@ -395,16 +429,11 @@ export const Screen4 = ({ response, setResponse, sharedData, setActiveTab, setSh
         setFormData((prev) => ({ ...prev, ...updates }));
       }
 
-      if (clearSharedData) {
-        clearSharedData();
-      }
-      if (clearSharedDataFrom7) {
-        clearSharedDataFrom7();
-      }
+      if (clearSharedData) clearSharedData();
+      if (clearSharedDataFrom7) clearSharedDataFrom7();
     }
   }, [sharedData, clearSharedData, clearSharedDataFrom7, formData.scripts, formData.imgUrls]);
 
-  // Persist response when it changes
   useEffect(() => {
     try {
       if (response && !response.error) {
@@ -418,7 +447,6 @@ export const Screen4 = ({ response, setResponse, sharedData, setActiveTab, setSh
     }
   }, [response]);
 
-  // Persist the list of regenerating videos to localStorage whenever it changes
   useEffect(() => {
     try {
       if (regeneratingVideos.length > 0) {
@@ -431,16 +459,12 @@ export const Screen4 = ({ response, setResponse, sharedData, setActiveTab, setSh
     }
   }, [regeneratingVideos]);
 
-  // Resume polling/restore state on mount
   useEffect(() => {
-    // --- Function to process a single pending regeneration job ---
     const processPendingRegeneration = async (regenItem) => {
       const { imageUrl, jobId } = regenItem;
       try {
-        console.log(`Resuming poll for job: ${jobId} (image: ${imageUrl})`);
         const newVideoData = await pollForResult(jobId);
 
-        // Update the main response state with the new video data
         setResponse(prevResponse => {
           if (!prevResponse || !prevResponse[0]?.videos) return prevResponse;
           const updatedVideos = prevResponse[0].videos.map(video => {
@@ -455,21 +479,16 @@ export const Screen4 = ({ response, setResponse, sharedData, setActiveTab, setSh
         });
       } catch (err) {
         console.error(`Polling for job ${jobId} failed or timed out:`, err);
-        // Optionally handle the error, e.g., show a failure state on the specific video
       } finally {
-        // IMPORTANT: Always remove the item from the regenerating list when done.
         setRegeneratingVideos(prev => prev.filter(item => item.jobId !== jobId));
       }
     };
 
-    // --- Check for pending regenerations on mount ---
     const pendingRegens = regeneratingVideos.filter(item => item.jobId);
     if (pendingRegens.length > 0) {
-      console.log("Found pending regenerations on mount, resuming polling...", pendingRegens);
       pendingRegens.forEach(processPendingRegeneration);
     }
 
-    // --- Restore initial generation state ---
     try {
       const savedResponse = localStorage.getItem(RESPONSE_KEY);
       if (savedResponse && !response) {
@@ -479,11 +498,9 @@ export const Screen4 = ({ response, setResponse, sharedData, setActiveTab, setSh
             setResponse(parsed);
             setDone(true);
           } else {
-             console.warn("Cleared invalid response from localStorage.");
              localStorage.removeItem(RESPONSE_KEY);
           }
         } catch (e) {
-          console.warn("Cleared malformed response from localStorage.");
           localStorage.removeItem(RESPONSE_KEY);
         }
       }
@@ -536,13 +553,15 @@ export const Screen4 = ({ response, setResponse, sharedData, setActiveTab, setSh
             localStorage.removeItem(JOB_STATE_KEY);
             localStorage.removeItem(RESPONSE_KEY);
             localStorage.removeItem(REGENERATING_VIDEOS_KEY);
+            localStorage.removeItem(HISTORY_KEY);
           } catch (_) {}
           setFormData({ scripts: "", imgUrls: "", model: "Veo3.1" });
           setResponse(null);
           setDone(false);
           setSelectedVideos([]);
           setUploadedImages([]);
-          setRegeneratingVideos([]); // Also clear the in-memory state
+          setRegeneratingVideos([]);
+          setHistory([]);
           if (fileInputRef.current) fileInputRef.current.value = null;
         }}
       >
@@ -553,7 +572,6 @@ export const Screen4 = ({ response, setResponse, sharedData, setActiveTab, setSh
       </h1>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* LEFT COLUMN – Inputs + Uploads */}
         <div className="lg:col-span-1 space-y-6">
           <InputSection
             title="Input Data"
@@ -567,7 +585,6 @@ export const Screen4 = ({ response, setResponse, sharedData, setActiveTab, setSh
             errors={validationErrors}
           />
 
-          {/* Upload section */}
           <div className="bg-muted/40 border border-border/30 rounded-xl p-4">
             <h3 className="text-sm font-medium mb-2 text-foreground/80">🖼 Upload Images</h3>
             <input
@@ -611,7 +628,6 @@ export const Screen4 = ({ response, setResponse, sharedData, setActiveTab, setSh
           </div>
         </div>
 
-        {/* RIGHT COLUMN – Output preview */}
         <div className="lg:col-span-2 space-y-6">
           {loading && (
             <div
@@ -639,7 +655,6 @@ export const Screen4 = ({ response, setResponse, sharedData, setActiveTab, setSh
             </div>
           )}
 
-          {/* Video Previews */}
           {response && !response.error && response[0]?.videos?.length > 0 && (
             <div className="mt-4 bg-muted/40 border border-border/30 rounded-xl p-4 text-center shadow-sm">
               <div className="flex justify-between items-center mb-2">
@@ -664,7 +679,6 @@ export const Screen4 = ({ response, setResponse, sharedData, setActiveTab, setSh
                 {response[0].videos.map((videoData, i) => {
                   const { videoUrl, imageUrl } = videoData;
                   const isError = typeof videoUrl !== 'string' || !videoUrl.startsWith('http');
-                  // CORRECTED: Check against the new state structure
                   const isCurrentlyRegenerating = regeneratingVideos.some(item => item.imageUrl === imageUrl);
 
                   return (
@@ -728,7 +742,6 @@ export const Screen4 = ({ response, setResponse, sharedData, setActiveTab, setSh
         </div>
       </div>
 
-      {/* Submit Button */}
       <div className="flex justify-center mt-10">
         {!done ? (
           <Button
@@ -782,7 +795,69 @@ export const Screen4 = ({ response, setResponse, sharedData, setActiveTab, setSh
         )}
       </div>
 
-      {/* Regeneration Modal */}
+      {/* MOVED: HISTORY SECTION IS NOW HERE */}
+      <div className="mt-12">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl font-bold text-white">📋 Generation History</h2>
+          <Button 
+            onClick={handleRefreshHistory} 
+            disabled={historyLoading}
+            variant="outline"
+            style={{ background: "#3b82f6", color: "white" }}
+          >
+            {historyLoading ? "Loading..." : "🔄 Refresh History"}
+          </Button>
+        </div>
+        {history.length > 0 ? (
+          <div className="overflow-x-auto bg-white rounded-lg shadow-lg p-1">
+            <table className="w-full text-sm text-left table-auto border-collapse border-4 border-black" style={{ borderWidth: '3px', borderColor: '#000' }}>
+              <thead className="text-xs uppercase bg-gray-200">
+                <tr>
+                  <th className="px-4 py-3 border-4 border-black w-[25%] bg-gray-100 font-bold text-black" style={{ borderWidth: '3px' }}>Scripts</th>
+                  <th className="px-4 py-3 border-4 border-black w-[20%] bg-gray-100 font-bold text-black" style={{ borderWidth: '3px' }}>Image Urls</th>
+                  <th className="px-4 py-3 border-4 border-black w-[30%] bg-gray-100 font-bold text-black" style={{ borderWidth: '3px' }}>Generated Videos</th>
+                  <th className="px-4 py-3 border-4 border-black w-[10%] bg-gray-100 font-bold text-black" style={{ borderWidth: '3px' }}>Model</th>
+                  <th className="px-4 py-3 border-4 border-black w-[15%] bg-gray-100 font-bold text-black" style={{ borderWidth: '3px' }}>Job ID</th>
+                </tr>
+              </thead>
+              <tbody>
+                {history.map((row, idx) => (
+                  <tr key={idx} className="border-4 border-black hover:bg-gray-50" style={{ borderWidth: '3px' }}>
+                    <td
+                      className="px-4 py-3 align-top text-xs border-4 border-black break-words text-black"
+                      style={{ borderWidth: '3px' }}
+                      dangerouslySetInnerHTML={{ __html: row.Scripts }}
+                    />
+                    <td className="px-4 py-3 align-top text-xs border-4 border-black break-words text-black" style={{ borderWidth: '3px' }}>
+                      <div className="grid grid-cols-2 gap-2">
+                        {row["Image Url"]?.split(/[\n,]+/).map((url, i) => (
+                          url.trim() && <a key={i} href={url.trim()} target="_blank" rel="noopener noreferrer">
+                            <img src={url.trim()} alt={`Input ${i}`} className="w-full h-auto object-cover rounded-md border border-black border-2 hover:opacity-80"/>
+                          </a>
+                        ))}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 align-top border-4 border-black" style={{ borderWidth: '3px' }}>
+                      <div className="grid grid-cols-2 gap-2">
+                        {row["Generated Videos"]?.split(',').map((url, i) => (
+                          url.trim() && <video key={i} src={url.trim()} controls className="w-full h-auto rounded-md border border-black border-2"/>
+                        ))}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 align-top text-xs border-4 border-black text-black" style={{ borderWidth: '3px' }}>{row.Model}</td>
+                    <td className="px-4 py-3 align-top text-xs border-4 border-black break-all text-black" style={{ borderWidth: '3px' }}>{row["Job ID"]}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : historyLoading ? (
+          <div className="text-center p-4 text-muted-foreground">Loading history...</div>
+        ) : (
+          <div className="text-center p-4 text-muted-foreground">No history available. Click Refresh to load.</div>
+        )}
+      </div>
+
       {isModalOpen && selectedVideoForRegen && (
         <div
           style={{
